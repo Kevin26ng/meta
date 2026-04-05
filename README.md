@@ -2,7 +2,11 @@
 
 ## 🎯 Project Overview
 
+<<<<<<< HEAD
 **Linux System SRE Environment** is an agentic training environment that simulates real-world Linux System Reliability Engineer (SRE) tasks. It's designed for AI agents to learn and practice critical infrastructure troubleshooting, demonstrating the **"agentic" workflow** that judges value.
+=======
+**Linux System SRE Environment** is an agentic training environment that simulates real-world Linux System Reliability Engineer (SRE) tasks. It's designed for AI agents to learn and practice critical infrastructure troubleshooting.
+>>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
 
 ### Why This Project?
 
@@ -21,7 +25,11 @@
    - Demonstrate: `cat`, `grep` commands
    - Grading: Binary (0.0 or 1.0)
 
+<<<<<<< HEAD
 2. **Medium**: Permission Repair  
+=======
+2. **Medium**: Permission Repair
+>>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
    - Make a script executable via `chmod`
    - Demonstrate: Permission tools, verification
    - Grading: Staged (0.0, 0.5, 1.0)
@@ -192,12 +200,20 @@ python -c "from src.environment import LinuxSREEnvironment; env = LinuxSREEnviro
 ### Efficiency Scoring
 
 - **Easy task**: Typically solvable in 2-3 steps
+<<<<<<< HEAD
 - **Medium task**: 3-5 steps  
+=======
+- **Medium task**: 3-5 steps
+>>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
 - **Hard task**: 5-8 steps
 
 ### Agent Baseline
 
 Expected LLM agent performance:
+<<<<<<< HEAD
+=======
+
+>>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
 - OpenAI GPT-4: 85-95% success rate
 - GPT-3.5: 70-80% success rate
 - Partial credit for staged recovery attempts
@@ -205,34 +221,60 @@ Expected LLM agent performance:
 ## 🎓 Why This Design Works for Judges
 
 ### 1. **Demonstrates "Agentic" Capability**
+<<<<<<< HEAD
+=======
+
+>>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
 - AI doesn't just chat—it performs real work
 - Terminal interaction shows agency
 - Multi-step execution shows planning
 
 ### 2. **Objective, Binary Grading**
+<<<<<<< HEAD
+=======
+
+>>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
 - File states can be verified with `os.access()`, `permissions`
 - Process status is definitive (running/dead)
 - No subjective evaluation needed
 
 ### 3. **Shows Partial Progress**
+<<<<<<< HEAD
+=======
+
+>>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
 - Tasks designed in stages (0.2 → 0.5 → 1.0)
 - Agents get credit for attempting recovery
 - Reward structure directly maps to progress
 
 ### 4. **Low Resource Footprint**
+<<<<<<< HEAD
+=======
+
+>>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
 - Pure Python, no heavy dependencies
 - Dict-based virtual filesystem (no disk I/O)
 - Runs on minimal hardware
 - No GPU required
 
 ### 5. **Algorithm Over Data Scale**
+<<<<<<< HEAD
+=======
+
+>>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
 - Wins with smart approaches, not raw compute
 - Better command sequence = higher score
 - Encourages algorithm exploration
 
 ### 6. **Real Industry Value**
+<<<<<<< HEAD
 - SRE domain is hot topic
 - Mirrors actual troubleshooting workflows  
+=======
+
+- SRE domain is hot topic
+- Mirrors actual troubleshooting workflows
+>>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
 - Skills transfer to real systems
 - Judges recognize value immediately
 
@@ -241,6 +283,10 @@ Expected LLM agent performance:
 ### Virtual Filesystem Design
 
 Pure dictionary-based simulation provides:
+<<<<<<< HEAD
+=======
+
+>>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
 - Instant reset capability
 - Perfect reproducibility
 - No side effects on host system
@@ -249,6 +295,10 @@ Pure dictionary-based simulation provides:
 ### Terminal Emulator
 
 Restricted command set balances:
+<<<<<<< HEAD
+=======
+
+>>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
 - Enough power for meaningful tasks
 - Safety (no destructive commands)
 - Predictable grading (no stochasticity)
@@ -257,6 +307,10 @@ Restricted command set balances:
 ### Task Grading
 
 Progressive scoring enables:
+<<<<<<< HEAD
+=======
+
+>>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
 - Partial credit for learning attempts
 - Encouragement for multi-stage recovery
 - Clear milestone tracking
