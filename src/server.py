@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 import uvicorn
 
 from .environment import TrainingEnv
-from .scenarios import list_scenarios, SCENARIO_CATALOG
+from .scenarios import list_scenarios, detail_scenario, SCENARIO_CATALOG
 
 app = FastAPI(
     title="Linux SRE Environment API",
@@ -106,7 +106,7 @@ async def get_scenario(key: str):
     if key not in SCENARIO_CATALOG:
         raise HTTPException(
             status_code=404, detail=f"Scenario '{key}' not found")
-    return list_scenarios()[key]
+    return detail_scenario(key)
 
 
 # ======================================================================

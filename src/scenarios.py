@@ -780,6 +780,54 @@ def list_scenarios() -> Dict[str, Dict]:
     return result
 
 
+def detail_scenario(key: str) -> Dict[str, Any]:
+    """Return full scenario details including faults, cascades, and objectives."""
+    factory = SCENARIO_CATALOG.get(key)
+    if not factory:
+        raise ValueError(
+            f"Unknown scenario: '{key}'. Available: {list(SCENARIO_CATALOG.keys())}")
+    s = factory()
+    return {
+        "key": key,
+        "name": s.name,
+        "difficulty": s.difficulty,
+        "description": s.description,
+        "max_steps": s.max_steps,
+        "hints": s.hints,
+        "faults": [
+            {
+                "name": f.name,
+                "description": f.description,
+                "apply_fn": f.apply_fn,
+                "params": f.params,
+            }
+            for f in s.faults
+        ],
+        "cascades": [
+            {
+                "condition_fn": c.condition_fn,
+                "condition_params": c.condition_params,
+                "effect": {
+                    "name": c.effect.name,
+                    "description": c.effect.description,
+                    "apply_fn": c.effect.apply_fn,
+                    "params": c.effect.params,
+                },
+            }
+            for c in s.cascades
+        ],
+        "objectives": [
+            {
+                "description": o.description,
+                "check_fn": o.check_fn,
+                "check_params": o.check_params,
+                "points": o.points,
+            }
+            for o in s.objectives
+        ],
+    }
+
+
 def load_scenario(key: str) -> Scenario:
     """Load and return a fresh copy of a scenario."""
     factory = SCENARIO_CATALOG.get(key)
