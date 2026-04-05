@@ -1,6 +1,6 @@
 "use client";
 
-import { Zap, Server, ChevronDown, CheckCircle2, ShieldAlert, Cpu } from "lucide-react";
+import { Zap, Server, ChevronDown, CheckCircle2, ShieldAlert, Cpu, Brain } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export default function ArenaPage() {
@@ -9,6 +9,11 @@ export default function ArenaPage() {
   
   const [commandsA, setCommandsA] = useState("cat /var/log/app.log\ngrep 500 /var/log/app.log");
   const [commandsB, setCommandsB] = useState("ls -la\ncat /var/log/app.log");
+  const [typeA, setTypeA] = useState<string>("script");
+  const [typeB, setTypeB] = useState<string>("rl");
+  const [modelA, setModelA] = useState<string>("ppo");
+  const [modelB, setModelB] = useState<string>("heuristic");
+  const [availableModels, setAvailableModels] = useState<any[]>([]);
   
   const [isRacing, setIsRacing] = useState(false);
   const [results, setResults] = useState<any>(null);
@@ -29,6 +34,14 @@ export default function ArenaPage() {
         console.error("Could not fetch scenarios", err);
         setError("Cannot reach backend. Is server.py running?");
       });
+
+    // Fetch available AI models
+    fetch("/api/v1/models")
+      .then(res => res.json())
+      .then(data => {
+        if (data.models) setAvailableModels(data.models);
+      })
+      .catch(err => console.error("Could not fetch models", err));
   }, []);
 
   const runRace = async () => {
@@ -44,7 +57,11 @@ export default function ArenaPage() {
           commands_a: commandsA.split("\n").filter(c => c.trim()),
           commands_b: commandsB.split("\n").filter(c => c.trim()),
           label_a: "AGENT_ALPHA",
-          label_b: "AGENT_BETA"
+          label_b: "AGENT_BETA",
+          type_a: typeA,
+          type_b: typeB,
+          model_a: modelA,
+          model_b: modelB
         })
       });
       if(!res.ok) {
@@ -109,12 +126,52 @@ export default function ArenaPage() {
             <h2 className="text-xl font-bold font-mono tracking-wider text-chaos-green">AGENT_ALPHA</h2>
           </div>
           
-          <textarea 
-            className="w-full bg-chaos-dark rounded flex-1 p-4 border border-chaos-border min-h-[160px] mb-4 font-mono text-sm text-chaos-text relative z-10 box-border focus:border-chaos-green focus:outline-none"
-            placeholder="Enter shell commands, one per line..."
-            value={commandsA}
-            onChange={e => setCommandsA(e.target.value)}
-          />
+          <div className="mb-4 relative z-10">
+            <label className="text-[10px] font-bold text-chaos-muted uppercase tracking-widest mb-2 block">Behavior Matrix</label>
+            <select 
+              value={typeA} 
+              onChange={e => setTypeA(e.target.value)}
+              className="w-full bg-chaos-darker border border-chaos-border rounded p-2 text-sm font-mono text-chaos-text outline-none focus:border-chaos-green"
+            >
+              <option value="script">Hardcoded Script</option>
+              <option value="llm">LLM Autonomous</option>
+              <option value="rl">RL Autonomous</option>
+            </select>
+          </div>
+
+          {typeA === "script" ? (
+            <textarea 
+              className="w-full bg-chaos-dark rounded flex-1 p-4 border border-chaos-border min-h-[160px] mb-4 font-mono text-sm text-chaos-text relative z-10 box-border focus:border-chaos-green focus:outline-none"
+              placeholder="Enter shell commands, one per line..."
+              value={commandsA}
+              onChange={e => setCommandsA(e.target.value)}
+            />
+          ) : typeA === "rl" ? (
+            <div className="flex-1 min-h-[160px] border border-chaos-border bg-chaos-darker rounded mb-4 relative z-10 flex flex-col items-center justify-center text-center p-6 bg-texture-stripes">
+               <Brain className="w-12 h-12 text-chaos-green mb-4 opacity-50" />
+               <h3 className="font-mono text-chaos-green font-bold mb-2">RL AUTONOMOUS MODE</h3>
+               <p className="text-xs text-chaos-muted tracking-wider leading-relaxed mb-4">
+                 Model: {availableModels.find(m => m.name === modelA)?.display_name || modelA.toUpperCase()}
+               </p>
+               <select
+                 value={modelA}
+                 onChange={e => setModelA(e.target.value)}
+                 className="bg-chaos-dark border border-chaos-border rounded px-3 py-1.5 text-xs font-mono text-chaos-text outline-none focus:border-chaos-green"
+               >
+                 {availableModels.map(m => (
+                   <option key={m.name} value={m.name} className="bg-chaos-dark">{m.display_name} {m.available ? '✓' : '—'}</option>
+                 ))}
+               </select>
+            </div>
+          ) : (
+            <div className="flex-1 min-h-[160px] border border-chaos-border bg-chaos-darker rounded mb-4 relative z-10 flex flex-col items-center justify-center text-center p-6 bg-texture-stripes">
+               <Brain className="w-12 h-12 text-chaos-green mb-4 opacity-50" />
+               <h3 className="font-mono text-chaos-green font-bold mb-2">AUTONOMOUS MODE ACTIVE</h3>
+               <p className="text-xs text-chaos-muted tracking-wider leading-relaxed">
+                 LLM Neural Net will dynamically respond to terminal output.
+               </p>
+            </div>
+          )}
         </div>
 
         {/* AGENT BETA */}
@@ -126,12 +183,52 @@ export default function ArenaPage() {
             <h2 className="text-xl font-bold font-mono tracking-wider text-chaos-red">AGENT_BETA</h2>
           </div>
           
-          <textarea 
-            className="w-full bg-chaos-dark rounded flex-1 p-4 border border-chaos-border min-h-[160px] mb-4 font-mono text-sm text-chaos-text relative z-10 box-border focus:border-chaos-red focus:outline-none"
-            placeholder="Enter shell commands, one per line..."
-            value={commandsB}
-            onChange={e => setCommandsB(e.target.value)}
-          />
+          <div className="mb-4 relative z-10">
+            <label className="text-[10px] font-bold text-chaos-muted uppercase tracking-widest mb-2 block">Behavior Matrix</label>
+            <select 
+              value={typeB} 
+              onChange={e => setTypeB(e.target.value)}
+              className="w-full bg-chaos-darker border border-chaos-border rounded p-2 text-sm font-mono text-chaos-text outline-none focus:border-chaos-red"
+            >
+              <option value="script">Hardcoded Script</option>
+              <option value="llm">LLM Autonomous</option>
+              <option value="rl">RL Autonomous</option>
+            </select>
+          </div>
+
+          {typeB === "script" ? (
+            <textarea 
+              className="w-full bg-chaos-dark rounded flex-1 p-4 border border-chaos-border min-h-[160px] mb-4 font-mono text-sm text-chaos-text relative z-10 box-border focus:border-chaos-red focus:outline-none"
+              placeholder="Enter shell commands, one per line..."
+              value={commandsB}
+              onChange={e => setCommandsB(e.target.value)}
+            />
+          ) : typeB === "rl" ? (
+            <div className="flex-1 min-h-[160px] border border-chaos-border bg-chaos-darker rounded mb-4 relative z-10 flex flex-col items-center justify-center text-center p-6 bg-texture-stripes">
+               <Brain className="w-12 h-12 text-chaos-red mb-4 opacity-50" />
+               <h3 className="font-mono text-chaos-red font-bold mb-2">RL AUTONOMOUS MODE</h3>
+               <p className="text-xs text-chaos-muted tracking-wider leading-relaxed mb-4">
+                 Model: {availableModels.find(m => m.name === modelB)?.display_name || modelB.toUpperCase()}
+               </p>
+               <select
+                 value={modelB}
+                 onChange={e => setModelB(e.target.value)}
+                 className="bg-chaos-dark border border-chaos-border rounded px-3 py-1.5 text-xs font-mono text-chaos-text outline-none focus:border-chaos-red"
+               >
+                 {availableModels.map(m => (
+                   <option key={m.name} value={m.name} className="bg-chaos-dark">{m.display_name} {m.available ? '✓' : '—'}</option>
+                 ))}
+               </select>
+            </div>
+          ) : (
+            <div className="flex-1 min-h-[160px] border border-chaos-border bg-chaos-darker rounded mb-4 relative z-10 flex flex-col items-center justify-center text-center p-6 bg-texture-stripes">
+               <Brain className="w-12 h-12 text-chaos-red mb-4 opacity-50" />
+               <h3 className="font-mono text-chaos-red font-bold mb-2">AUTONOMOUS MODE ACTIVE</h3>
+               <p className="text-xs text-chaos-muted tracking-wider leading-relaxed">
+                 LLM Neural Net will dynamically respond to terminal output.
+               </p>
+            </div>
+          )}
         </div>
       </div>
 

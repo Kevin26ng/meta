@@ -756,14 +756,6 @@ SCENARIO_CATALOG: Dict[str, Callable[[], Scenario]] = {
     "full_incident":          _scenario_full_incident,
 }
 
-# backward-compat mapping: difficulty -> default scenario
-DIFFICULTY_MAP: Dict[str, str] = {
-    "easy":   "log_analysis",
-    "medium": "permission_repair",
-    "hard":   "process_recovery",
-    "expert": "cascading_db_failure",
-}
-
 
 def list_scenarios() -> Dict[str, Dict]:
     """Return metadata for all registered scenarios."""

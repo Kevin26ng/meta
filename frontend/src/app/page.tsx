@@ -1,5 +1,9 @@
-import { Activity, Skull, HardDrive, Globe, Cpu, Server, Filter, SlidersHorizontal, Settings } from "lucide-react";
+"use client";
+
+import { Activity, Skull, HardDrive, Globe, Cpu, Server, SlidersHorizontal, Settings, Search, X, ChevronDown } from "lucide-react";
 import Link from "next/link";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 
 interface ScenarioItem {
   id: string;
@@ -10,28 +14,54 @@ interface ScenarioItem {
   max_steps: number;
 }
 
-// Ensure the page gets fresh data (no static optimization for the api call)
-export const dynamic = "force-dynamic";
+export default function HubPage() {
+  const searchParams = useSearchParams();
+  const searchQuery = searchParams.get("search") || "";
 
-export default async function HubPage() {
-  let scenarios: Record<string, any> = {};
-  
-  try {
-    const res = await fetch("http://127.0.0.1:8000/api/v1/scenarios", { cache: "no-store" });
-    if (res.ok) {
-      const data = await res.json();
-      scenarios = data.scenarios || {};
-    }
-  } catch (e) {
-    console.error("Failed to fetch scenarios from backend:", e);
-    // Silent fail to empty object if backend is not running yet
-  }
+  const [scenarios, setScenarios] = useState<Record<string, any>>({});
+  const [complexityFilter, setComplexityFilter] = useState<string | null>(null);
+  const [complexityOpen, setComplexityOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch("/api/v1/scenarios")
+      .then(r => r.json())
+      .then(data => {
+        setScenarios(data.scenarios || {});
+      })
+      .catch(console.error);
+  }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setComplexityOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Convert the dictionary to an array for mapping
   const scenarioList = Object.keys(scenarios).map(key => ({
     id: key,
     ...scenarios[key]
   }));
+
+  // Filter scenarios by search (from Navbar) and complexity
+  const filteredScenarios = scenarioList.filter((s) => {
+    const matchesSearch =
+      !searchQuery ||
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.id.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesComplexity =
+      !complexityFilter || s.difficulty === complexityFilter;
+
+    return matchesSearch && matchesComplexity;
+  });
 
   // Helper to map backend difficulty to UI tags
   const getStatus = (diff: string) => {
@@ -55,6 +85,16 @@ export default async function HubPage() {
     return <Cpu {...props} />;
   };
 
+  const complexityOptions = [
+    { value: null, label: "All Levels", dotColor: "bg-chaos-muted" },
+    { value: "easy", label: "Safe", dotColor: "bg-chaos-green" },
+    { value: "medium", label: "Medium", dotColor: "bg-chaos-cyan" },
+    { value: "hard", label: "Critical", dotColor: "bg-chaos-red" },
+    { value: "expert", label: "Expert", dotColor: "bg-chaos-red" },
+  ];
+
+  const currentComplexityLabel = complexityOptions.find(o => o.value === complexityFilter)?.label || "All Levels";
+
   return (
     <div className="max-w-7xl mx-auto px-6 py-10 pb-20">
       
@@ -66,15 +106,76 @@ export default async function HubPage() {
             Central nervous system for system resilience. Browse production-hardened tools and scenarios to stress test your architecture.
           </p>
         </div>
-        <div className="flex gap-3">
-          <button className="flex items-center gap-2 bg-chaos-panel border border-chaos-border px-4 py-2 rounded text-sm hover:border-chaos-muted transition-colors">
-            <Filter className="w-4 h-4" /> Filter
-          </button>
-          <button className="flex items-center gap-2 bg-chaos-panel border border-chaos-border px-4 py-2 rounded text-sm hover:border-chaos-muted transition-colors">
-            <SlidersHorizontal className="w-4 h-4" /> Complexity
-          </button>
+        <div className="flex gap-3 items-center">
+          {/* Complexity Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              id="complexity-filter"
+              onClick={() => setComplexityOpen(!complexityOpen)}
+              className={`flex items-center gap-2 bg-chaos-panel border px-4 py-2 rounded text-sm transition-all ${
+                complexityFilter
+                  ? "border-chaos-green/40 text-chaos-green shadow-[0_0_10px_rgba(57,255,20,0.08)]"
+                  : "border-chaos-border hover:border-chaos-muted text-chaos-text"
+              }`}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              <span>{currentComplexityLabel}</span>
+              <ChevronDown className={`w-3.5 h-3.5 text-chaos-muted transition-transform ${complexityOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {complexityOpen && (
+              <div className="absolute top-full right-0 mt-2 w-[180px] bg-chaos-panel border border-chaos-border rounded-lg shadow-xl z-50 overflow-hidden">
+                {complexityOptions.map((opt) => (
+                  <button
+                    key={opt.label}
+                    onClick={() => { setComplexityFilter(opt.value); setComplexityOpen(false); }}
+                    className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors ${
+                      complexityFilter === opt.value
+                        ? "bg-chaos-darker text-chaos-text"
+                        : "hover:bg-chaos-darker/60 text-chaos-muted hover:text-chaos-text"
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${opt.dotColor} ${opt.value === "expert" ? "animate-pulse" : ""}`} />
+                    <span className="font-medium">{opt.label}</span>
+                    {complexityFilter === opt.value && (
+                      <span className="ml-auto text-chaos-green text-xs">✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Active Filters */}
+      {(searchQuery || complexityFilter) && (
+        <div className="flex items-center gap-3 mb-6">
+          <span className="text-[10px] font-bold text-chaos-muted uppercase tracking-widest">Active Filters:</span>
+          {searchQuery && (
+            <span className="flex items-center gap-1.5 text-xs bg-chaos-panel border border-chaos-border rounded px-2.5 py-1 text-chaos-text">
+              <Search className="w-3 h-3 text-chaos-muted" />
+              &quot;{searchQuery}&quot;
+            </span>
+          )}
+          {complexityFilter && (
+            <span className={`flex items-center gap-1.5 text-xs rounded px-2.5 py-1 border ${getStatus(complexityFilter).color}`}>
+              {getStatus(complexityFilter).label}
+              <button onClick={() => setComplexityFilter(null)} className="hover:opacity-70 transition-opacity ml-1">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {complexityFilter && (
+            <button
+              onClick={() => setComplexityFilter(null)}
+              className="text-[10px] text-chaos-muted hover:text-chaos-red transition-colors uppercase tracking-widest ml-2"
+            >
+              Clear All
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-8 border-b border-chaos-border mb-8">
@@ -90,9 +191,23 @@ export default async function HubPage() {
         </div>
       )}
 
+      {scenarioList.length > 0 && filteredScenarios.length === 0 && (
+        <div className="text-center py-12 bg-chaos-panel/30 border border-chaos-border rounded-lg mb-12">
+          <Search className="w-10 h-10 text-chaos-muted mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-chaos-text">No Matching Scenarios</h3>
+          <p className="text-chaos-muted mb-4">No scenarios match your current filters.</p>
+          <button
+            onClick={() => setComplexityFilter(null)}
+            className="text-sm text-chaos-green hover:underline"
+          >
+            Clear filters
+          </button>
+        </div>
+      )}
+
       {/* Grid of Scenarios */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-        {scenarioList.map((tool) => {
+        {filteredScenarios.map((tool) => {
           const status = getStatus(tool.difficulty);
           return (
             <Link key={tool.id} href={`/playground?scenario=${tool.id}`}>

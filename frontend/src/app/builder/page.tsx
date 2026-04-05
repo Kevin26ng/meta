@@ -3,7 +3,7 @@
 import {
   Cpu, Globe, Server, Activity, Zap, Play, Download,
   Network, Database, CheckCircle2, Shield, HardDrive,
-  ChevronDown, AlertTriangle, Target, Eye
+  ChevronDown, AlertTriangle, Target, Eye, Brain
 } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -173,9 +173,9 @@ export default function BuilderPage() {
     return lines.join("\n");
   }, [detail]);
 
-  const handleExecute = () => {
+  const handleExecute = (agent?: string) => {
     if (selectedKey) {
-      router.push(`/playground?scenario=${selectedKey}`);
+      router.push(`/playground?scenario=${selectedKey}${agent ? `&auto_agent=${agent}` : ''}`);
     }
   };
 
@@ -560,15 +560,32 @@ export default function BuilderPage() {
           </div>
         </div>
 
-        {/* Action Buttons */}
         <div className="p-4 border-t border-chaos-border bg-chaos-panel space-y-3">
           <button
-            onClick={handleExecute}
+            onClick={() => handleExecute()}
             disabled={!selectedKey}
-            className="w-full flex items-center justify-center gap-2 bg-chaos-green text-chaos-dark font-bold px-4 py-3 rounded hover:bg-chaos-green/90 transition-colors uppercase tracking-widest text-sm shadow-[0_0_15px_rgba(57,255,20,0.2)] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 bg-chaos-green text-chaos-dark font-bold px-4 py-3 rounded hover:bg-chaos-green/90 transition-colors uppercase tracking-widest text-sm shadow-[0_0_15px_rgba(57,255,20,0.2)] disabled:opacity-40 disabled:cursor-not-allowed mb-2"
           >
             <Play className="w-4 h-4 fill-current" /> Execute Experiment
           </button>
+          
+          {/* AI Tests */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleExecute('llm')}
+              disabled={!selectedKey}
+              className="flex-1 flex items-center justify-center gap-2 bg-chaos-darker border border-chaos-cyan text-chaos-cyan font-bold px-2 py-2 rounded hover:bg-chaos-cyan/10 transition-colors uppercase text-[10px] tracking-widest disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Brain className="w-3 h-3" /> Test LLM
+            </button>
+            <button
+              onClick={() => handleExecute('rl')}
+              disabled={!selectedKey}
+              className="flex-1 flex items-center justify-center gap-2 bg-chaos-darker border border-chaos-cyan text-chaos-cyan font-bold px-2 py-2 rounded hover:bg-chaos-cyan/10 transition-colors uppercase text-[10px] tracking-widest disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Brain className="w-3 h-3" /> Test RL
+            </button>
+          </div>
           <button
             onClick={handleExport}
             disabled={!yamlConfig}

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { Suspense } from "react";
 import Navbar from "@/components/Navbar";
 import "./globals.css";
 
@@ -29,9 +30,13 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="flex flex-col h-screen overflow-hidden text-chaos-text selection:bg-chaos-green selection:text-chaos-dark">
-        <Navbar />
+        <Suspense>
+          <Navbar />
+        </Suspense>
         <main className="flex-1 overflow-auto">
-          {children}
+          <Suspense>
+            {children}
+          </Suspense>
         </main>
       </body>
     </html>

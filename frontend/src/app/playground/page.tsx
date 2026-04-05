@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, CircleCheck, Circle, Search, History, CheckCircle2 } from "lucide-react";
+import { Activity, CircleCheck, Circle, Search, History, CheckCircle2, Brain, ChevronDown } from "lucide-react";
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -24,6 +24,7 @@ export default function PlaygroundPage() {
 function PlaygroundContent() {
   const searchParams = useSearchParams();
   const scenarioKey = searchParams.get('scenario') || 'log_analysis';
+  const autoAgent = searchParams.get('auto_agent');
 
   const [envId, setEnvId] = useState<string | null>(null);
   const [scenarioMeta, setScenarioMeta] = useState<any>(null);
@@ -34,9 +35,25 @@ function PlaygroundContent() {
   const [maxSteps, setMaxSteps] = useState(50);
   const [isReady, setIsReady] = useState(false);
   const [statusText, setStatusText] = useState("CONNECTING...");
+  const [activeAgent, setActiveAgent] = useState<string | null>(null);
+  const [activeModelName, setActiveModelName] = useState<string | null>(null);
+  const [availableModels, setAvailableModels] = useState<any[]>([]);
+  const [selectedModel, setSelectedModel] = useState("ppo");
+  const [showModelMenu, setShowModelMenu] = useState(false);
   
   const ws = useRef<WebSocket | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const hasAutoStarted = useRef(false);
+
+  // Fetch available AI models
+  useEffect(() => {
+    fetch("/api/v1/models")
+      .then(res => res.json())
+      .then(data => {
+        if (data.models) setAvailableModels(data.models);
+      })
+      .catch(err => console.error("Could not fetch models", err));
+  }, []);
 
   // Fetch Scenario Meta & Init environment
   useEffect(() => {
@@ -102,6 +119,10 @@ function PlaygroundContent() {
         if (data.done) {
           setLogs(prev => [...prev, { type: 'system', text: '--- SCENARIO COMPLETED ---' }]);
         }
+      } else if (data.type === "input") {
+        setLogs(prev => [...prev, { type: 'input', text: data.text }]);
+      } else if (data.type === "system") {
+        setLogs(prev => [...prev, { type: 'system', text: data.text }]);
       } else if (data.type === "error") {
         setLogs(prev => [...prev, { type: 'error', text: data.message }]);
       }
@@ -127,8 +148,36 @@ function PlaygroundContent() {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
+  // Handle Auto Start Agent
+  useEffect(() => {
+    if (isReady && autoAgent && !hasAutoStarted.current && envId) {
+      hasAutoStarted.current = true;
+      startAgent(autoAgent);
+    }
+  }, [isReady, autoAgent, envId]);
+
+  const startAgent = async (type: string, modelName?: string) => {
+    if (!envId) return;
+    setActiveAgent(type);
+    const mn = modelName || selectedModel;
+    setActiveModelName(mn);
+    const displayName = availableModels.find(m => m.name === mn)?.display_name || mn.toUpperCase();
+    setLogs(prev => [...prev, { type: 'system', text: `INITIATING AUTONOMOUS MODE: [${type.toUpperCase()}] Model: ${displayName}` }]);
+    try {
+      await fetch(`/api/v1/env/${envId}/agent_run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agent_type: type, model_name: mn })
+      });
+    } catch(e) {
+      console.error(e);
+      setActiveAgent(null);
+      setActiveModelName(null);
+    }
+  };
+
   const handleCommand = () => {
-    if (!command.trim() || !ws.current || !isReady) return;
+    if (!command.trim() || !ws.current || !isReady || activeAgent) return;
     
     // Optimistic UI update
     setLogs(prev => [...prev, { type: 'input', text: command }]);
@@ -216,10 +265,60 @@ function PlaygroundContent() {
               <div className="w-3 h-3 rounded-full bg-chaos-muted/50"></div>
               <div className="w-3 h-3 rounded-full bg-chaos-green/80"></div>
             </div>
-            <div className="ml-4 flex text-xs font-mono text-chaos-muted space-x-1">
+            <div className="ml-4 flex text-xs font-mono text-chaos-muted space-x-1 border-r border-chaos-border/50 pr-4">
               <span className="text-chaos-text px-2 py-1 bg-chaos-darker rounded border border-chaos-border/50">
                 root@chaoslab-{envId || 'init'} ~ (ssh)
               </span>
+            </div>
+            {/* AGENT INJECTOR */}
+            <div className="flex items-center text-xs font-mono pl-1">
+              {activeAgent ? (
+                <span className="text-chaos-cyan bg-chaos-cyan/10 border border-chaos-cyan/30 px-2 py-1 rounded flex items-center gap-2">
+                  <Brain className="w-3 h-3 animate-pulse" /> {activeAgent.toUpperCase()} — {availableModels.find(m => m.name === activeModelName)?.display_name || activeModelName?.toUpperCase() || ''}
+                </span>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-chaos-muted uppercase ml-2 tracking-widest">Auto-Solve:</span>
+                  <button onClick={() => startAgent('llm')} className="text-chaos-muted tracking-widest hover:text-chaos-cyan border border-chaos-border hover:border-chaos-cyan px-2 py-1 rounded transition-colors" title="Auto-Solve with LLM">LLM</button>
+                  
+                  {/* RL Model Selector Dropdown */}
+                  <div className="relative">
+                    <button 
+                      onClick={() => setShowModelMenu(!showModelMenu)}
+                      className="text-chaos-muted tracking-widest hover:text-chaos-green border border-chaos-border hover:border-chaos-green px-2 py-1 rounded transition-colors flex items-center gap-1"
+                      title="Auto-Solve with RL Model"
+                    >
+                      RL <ChevronDown className="w-3 h-3" />
+                    </button>
+                    {showModelMenu && (
+                      <div className="absolute top-full right-0 mt-1 bg-chaos-darker border border-chaos-border rounded-lg shadow-xl z-50 min-w-[220px] overflow-hidden">
+                        <div className="px-3 py-2 border-b border-chaos-border text-[10px] text-chaos-muted uppercase tracking-widest">Select AI Model</div>
+                        {availableModels.filter(m => m.name !== 'llm').map(m => (
+                          <button
+                            key={m.name}
+                            onClick={() => {
+                              setSelectedModel(m.name);
+                              setShowModelMenu(false);
+                              startAgent('rl', m.name);
+                            }}
+                            className="w-full text-left px-3 py-2.5 hover:bg-chaos-green/10 transition-colors border-b border-chaos-border/30 last:border-0"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-mono text-chaos-text font-bold">{m.display_name}</span>
+                              {m.available ? (
+                                <span className="text-[9px] text-chaos-green bg-chaos-green/10 px-1.5 py-0.5 rounded font-mono">READY</span>
+                              ) : (
+                                <span className="text-[9px] text-chaos-muted bg-chaos-muted/10 px-1.5 py-0.5 rounded font-mono">N/A</span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-chaos-muted mt-0.5 leading-relaxed">{m.algorithm}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -258,9 +357,9 @@ function PlaygroundContent() {
               onKeyDown={e => {
                  if(e.key === 'Enter') handleCommand();
               }}
-              className="bg-transparent border-none outline-none flex-1 font-mono text-chaos-text focus:ring-0"
+              className="bg-transparent border-none outline-none flex-1 font-mono text-chaos-text focus:ring-0 disabled:opacity-50"
               autoFocus
-              disabled={!isReady}
+              disabled={!isReady || activeAgent !== null}
               autoComplete="off"
             />
           </div>
@@ -282,16 +381,16 @@ function PlaygroundContent() {
       </div>
 
       {/* Right Sidebar */}
-      <div className="w-[280px] shrink-0 flex flex-col gap-6">
+      <div className="w-[280px] shrink-0 flex flex-col gap-6 h-full overflow-hidden">
         
         {/* Log History */}
-        <div className="bg-chaos-panel/30 border border-chaos-border p-4 rounded-xl flex-1 flex flex-col">
-          <div className="flex justify-between items-center mb-6">
+        <div className="bg-chaos-panel/30 border border-chaos-border p-4 rounded-xl flex-1 flex flex-col overflow-hidden">
+          <div className="flex justify-between items-center mb-6 shrink-0">
             <h3 className="text-xs font-bold uppercase tracking-widest text-chaos-muted">Command Feed</h3>
             <History className="w-4 h-4 text-chaos-muted" />
           </div>
           
-          <div className="space-y-4 overflow-y-auto flex-1 h-0 pr-2">
+          <div className="space-y-4 overflow-y-auto flex-1 pr-2">
             {[...logs].reverse().filter(l => l.type === 'input').map((log, idx) => (
               <div key={idx} className="flex items-start gap-3 opacity-80">
                 <div className="w-1.5 h-1.5 rounded-full bg-chaos-green mt-1.5"></div>

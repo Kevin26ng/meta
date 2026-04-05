@@ -2,7 +2,6 @@ import pytest
 from src.virtual_filesystem import SystemStore
 from src.terminal_emulator import Shell
 from src.environment import TrainingEnv
-from src.tasks import REGISTRY
 
 
 class TestSystemStore:
@@ -114,7 +113,7 @@ class TestShell:
 class TestTrainingEnv:
     
     def test_reset(self):
-        env = TrainingEnv(difficulty="easy")
+        env = TrainingEnv(scenario="log_analysis")
         res = env.reset()
         
         assert "observation" in res
@@ -122,7 +121,7 @@ class TestTrainingEnv:
         assert res["info"]["task_name"] == "Log Analysis"
     
     def test_step(self):
-        env = TrainingEnv(difficulty="easy")
+        env = TrainingEnv(scenario="log_analysis")
         env.reset()
         
         res = env.step("grep 500 /var/log/app.log")
@@ -132,8 +131,8 @@ class TestTrainingEnv:
         assert "done" in res
         assert "info" in res
     
-    def test_easy_task_completion(self):
-        env = TrainingEnv(difficulty="easy")
+    def test_log_analysis_completion(self):
+        env = TrainingEnv(scenario="log_analysis")
         env.reset()
         
         res = env.step("grep 500 /var/log/app.log")
@@ -141,8 +140,8 @@ class TestTrainingEnv:
         assert res["info"]["task_score"] == 1.0
         assert res["done"]
     
-    def test_medium_task_completion(self):
-        env = TrainingEnv(difficulty="medium")
+    def test_permission_repair_completion(self):
+        env = TrainingEnv(scenario="permission_repair")
         env.reset()
         
         res = env.step("chmod 0755 /home/user/scripts/cleanup.sh")
@@ -150,8 +149,8 @@ class TestTrainingEnv:
         assert res["info"]["task_score"] == 1.0
         assert res["done"]
     
-    def test_hard_task_stages(self):
-        env = TrainingEnv(difficulty="hard")
+    def test_process_recovery_stages(self):
+        env = TrainingEnv(scenario="process_recovery")
         env.reset()
         
         res = env.step("ps | grep postgres")
@@ -163,7 +162,7 @@ class TestTrainingEnv:
         assert s2 >= s1
     
     def test_episode_termination(self):
-        env = TrainingEnv(difficulty="easy")
+        env = TrainingEnv(scenario="log_analysis")
         env.reset()
         
         res = env.step("grep 500 /var/log/app.log")
@@ -173,38 +172,20 @@ class TestTrainingEnv:
         assert res["done"]
 
 
-class TestObjective:
-    
-    def test_easy_task_exists(self):
-        assert "easy" in REGISTRY
-        task = REGISTRY["easy"]
-        assert task.nm == "Log Analysis"
-    
-    def test_medium_task_exists(self):
-        assert "medium" in REGISTRY
-        task = REGISTRY["medium"]
-        assert task.nm == "Permission Repair"
-    
-    def test_hard_task_exists(self):
-        assert "hard" in REGISTRY
-        task = REGISTRY["hard"]
-        assert task.nm == "Process Recovery"
-
 
 class TestIntegration:
     
-    def test_full_easy_workflow(self):
-        env = TrainingEnv(difficulty="easy")
+    def test_full_log_analysis_workflow(self):
+        env = TrainingEnv(scenario="log_analysis")
         env.reset()
         
-        env.step("cat /var/log/app.log")
         res = env.step("grep 500 /var/log/app.log")
         
         assert res["done"]
         assert res["info"]["task_score"] == 1.0
     
-    def test_full_medium_workflow(self):
-        env = TrainingEnv(difficulty="medium")
+    def test_full_perm_repair_workflow(self):
+        env = TrainingEnv(scenario="permission_repair")
         env.reset()
         
         env.step("ls -la /home/user/scripts/cleanup.sh")
@@ -214,8 +195,8 @@ class TestIntegration:
         assert res["info"]["task_score"] == 1.0
     
     def test_multiple_environments(self):
-        e1 = TrainingEnv(difficulty="easy")
-        e2 = TrainingEnv(difficulty="medium")
+        e1 = TrainingEnv(scenario="log_analysis")
+        e2 = TrainingEnv(scenario="permission_repair")
         
         r1 = e1.reset()
         r2 = e2.reset()

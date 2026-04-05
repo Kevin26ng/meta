@@ -2,7 +2,7 @@ from typing import Dict, List, Any
 from .virtual_filesystem import SystemStore
 from .terminal_emulator import Shell
 from .tasks import (
-    REGISTRY, Objective, ScenarioTask,
+    Objective, ScenarioTask,
     get_task, all_task_keys, task_metadata,
 )
 from .scenarios import list_scenarios
@@ -10,13 +10,11 @@ from .scenarios import list_scenarios
 
 class TrainingEnv:
 
-    def __init__(self, difficulty: str = "medium", scenario: str = None):
+    def __init__(self, scenario: str = "log_analysis"):
         """
-        Create environment. Pass either:
-          - difficulty='easy'|'medium'|'hard'  (legacy tasks)
-          - scenario='cascading_db_failure'    (new scenario engine)
+        Create environment for a given scenario key.
         """
-        key = scenario or difficulty
+        key = scenario
         self.task = get_task(key)
         self.difficulty = self.task.diff
         self.storage = SystemStore()

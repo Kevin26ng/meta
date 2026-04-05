@@ -6,9 +6,8 @@ from .environment import TrainingEnv
 class AIWorker:
     """Programmatic agent interface — drive the environment step by step."""
 
-    def __init__(self, task_difficulty: str = "medium", scenario: str = None):
-        self.engine = TrainingEnv(
-            difficulty=task_difficulty, scenario=scenario)
+    def __init__(self, scenario: str = "log_analysis"):
+        self.engine = TrainingEnv(scenario=scenario)
         self.recorder: List[Dict[str, Any]] = []
 
     def boot(self) -> Dict[str, Any]:
@@ -124,16 +123,16 @@ class LLMAgent:
                     "litellm is required for LLMAgent. Install with: pip install litellm"
                 )
 
-    def solve(self, scenario: str = None, difficulty: str = "medium") -> Dict[str, Any]:
+    def solve(self, scenario: str = "log_analysis") -> Dict[str, Any]:
         """Run the agent loop: observe → think → act → repeat until done."""
         self._ensure_litellm()
 
-        worker = AIWorker(task_difficulty=difficulty, scenario=scenario)
+        worker = AIWorker(scenario=scenario)
         initial = worker.boot()
 
         messages = [
             {"role": "system", "content": SystemPrompts.get_sys(
-                initial.get("task_name", difficulty))},
+                initial.get("task_name", scenario))},
             {"role": "user",
                 "content": SystemPrompts.format_observation(initial)},
         ]
@@ -252,7 +251,7 @@ class SystemPrompts:
 
 def demo():
     """Quick demo showing the agent solving the medium task."""
-    agent = AIWorker(task_difficulty="medium")
+    agent = AIWorker(scenario="permission_repair")
     initial = agent.boot()
     print(f"Task: {initial['task_name']}")
     print(f"Scripts: {initial['observation']['filesystem']}")
