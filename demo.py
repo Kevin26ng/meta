@@ -6,7 +6,7 @@ def easy_demo():
     print("DEMO: Easy Task - Log Analysis")
     print("=" * 60)
     
-    env = TrainingEnv(difficulty="easy")
+    env = TrainingEnv(scenario="log_analysis")
     res = env.reset()
     
     print(f"\nTask: {res['info']['task_name']}")
@@ -34,7 +34,7 @@ def medium_demo():
     print("DEMO: Medium Task - Permission Repair")
     print("=" * 60)
     
-    env = TrainingEnv(difficulty="medium")
+    env = TrainingEnv(scenario="permission_repair")
     res = env.reset()
     
     print(f"\nTask: {res['info']['task_name']}")
@@ -64,7 +64,7 @@ def hard_demo():
     print("DEMO: Hard Task - Process Recovery")
     print("=" * 60)
     
-    env = TrainingEnv(difficulty="hard")
+    env = TrainingEnv(scenario="process_recovery")
     res = env.reset()
     
     print(f"\nTask: {res['info']['task_name']}")
@@ -95,7 +95,7 @@ def agent_demo():
     print("DEMO: LLM Agent Interaction Pattern")
     print("=" * 60)
     
-    env = TrainingEnv(difficulty="medium")
+    env = TrainingEnv(scenario="permission_repair")
     res = env.reset()
     
     print("\nAgent workflow:")

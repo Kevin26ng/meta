@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from typing import Optional, Dict, Any, List
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks
@@ -228,6 +229,11 @@ class ConnectionManager:
 ws_manager = ConnectionManager()
 
 
+async def wait_briefly() -> None:
+    """Yield control without adding user-visible latency."""
+    await asyncio.sleep(0)
+
+
 @app.websocket("/ws/env/{env_id}")
 async def ws_terminal(ws: WebSocket, env_id: str):
     """
@@ -316,7 +322,7 @@ async def run_agent_in_background(env_id: str, agent_type: str, model_name: str 
             
             # Send a system notice that LLM is booting
             await ws_manager.broadcast(env_id, {"type": "system", "text": "Booting Autonomous LLM via litellm..."})
-            await asyncio.sleep(1)
+            await wait_briefly()
             
             agent = LLMAgent(model="openai/gpt-4o", api_key=os.environ.get("OPENAI_API_KEY", ""), verbose=False)
             
@@ -335,7 +341,7 @@ async def run_agent_in_background(env_id: str, agent_type: str, model_name: str 
             while not done and step < env.limit:
                 # LLM takes a few seconds to think
                 await ws_manager.broadcast(env_id, {"type": "system", "text": "LLM is thinking..."})
-                await asyncio.sleep(2.0) 
+                await wait_briefly()
                 
                 # We could call real LLM here, but since user permitted dummy for RL maybe dummy for LLM without API key is fine
                 # Or we can just try to run real litellm.
@@ -373,7 +379,7 @@ async def run_agent_in_background(env_id: str, agent_type: str, model_name: str 
             display_name = registry.get_display_name(model_name)
 
             await ws_manager.broadcast(env_id, {"type": "system", "text": f"Booting AI Agent: [{display_name}]..."})
-            await asyncio.sleep(1)
+            await wait_briefly()
 
             # Hijack the actively running sandbox environment
             rl_env = ChaosLabEnv()
@@ -394,7 +400,7 @@ async def run_agent_in_background(env_id: str, agent_type: str, model_name: str 
 
             done = False
             while not done and env.step_count < env.limit:
-                await asyncio.sleep(1.2)  # Simulate thinking delay
+                await wait_briefly()
 
                 # Get observation and predict
                 obs = rl_env.get_current_obs()
@@ -406,7 +412,7 @@ async def run_agent_in_background(env_id: str, agent_type: str, model_name: str 
                         "type": "system",
                         "text": f"[{actual_name}] {reasoning}"
                     })
-                    await asyncio.sleep(0.5)
+                    await wait_briefly()
 
                 action_arr, _ = model.predict(obs, deterministic=True)
                 action = int(action_arr)
@@ -449,6 +455,16 @@ async def start_agent_run(env_id: str, req: AgentRunPayload, background_tasks: B
 #  AGENT ARENA — compare models on same scenario
 # ======================================================================
 
+class ChatQueryPayload(BaseModel):
+    query: str = Field(description="User question or request for LLM assistance")
+
+
+class ChatResponsePayload(BaseModel):
+    response: str
+    suggested_command: Optional[str] = None
+    reasoning: str
+
+
 class ArenaPayload(BaseModel):
     scenario: str = Field(description="Scenario key to run")
     commands_a: List[str] = Field(description="Commands for Agent A")
@@ -482,7 +498,7 @@ async def arena_run(req: ArenaPayload):
             try:
                 from .agent import LLMAgent
                 import os
-                agent = LLMAgent(model="openai/gpt-4o", api_key=os.environ.get("OPENAI_API_KEY", ""), verbose=False)
+                agent = LLMAgent(verbose=False)
                 res = agent.solve(scenario=req.scenario)
                 for i, turn in enumerate(res.get("turns", [])):
                     history.append({
@@ -580,6 +596,90 @@ async def arena_run(req: ArenaPayload):
         "results": results,
         "winner": winner,
     }
+
+
+# ======================================================================
+#  LLM CHAT ASSISTANT
+# ======================================================================
+
+@app.post("/api/v1/chat/{env_id}")
+async def chat_assistant(env_id: str, req: ChatQueryPayload) -> ChatResponsePayload:
+    """
+    Interactive chat endpoint for getting LLM suggestions based on environment context.
+    """
+    if env_id not in backends:
+        raise HTTPException(status_code=404, detail="Environment not found")
+    
+    try:
+        from .agent import LLMAgent
+        
+        env = backends[env_id]
+        user_query = req.query.strip()
+        
+        # Build context safely
+        context = "You are a Linux SRE assistant helping solve system tasks.\n"
+        try:
+            context += f"Current Task: {env.task.nm}\n"
+            context += f"Task Desc: {env.task.desc}\n"
+        except:
+            context += "Task: Unknown\n"
+        
+        try:
+            context += f"Score: {env.score} | Steps: {env.step_count}/{env.limit}\n"
+        except:
+            pass
+        
+        # Initialize LLM agent
+        llm_agent = LLMAgent(verbose=False)
+        client = llm_agent._ensure_client()
+        
+        # Build messages
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    context + 
+                    "\nYou are helpful and concise. Suggest specific shell commands for the current task. "
+                    "Respond in 1-2 sentences."
+                ),
+            },
+            {
+                "role": "user",
+                "content": user_query,
+            },
+        ]
+        
+        # Get LLM response
+        response = client.chat.completions.create(
+            model=llm_agent.model,
+            messages=messages,
+            temperature=0.2,
+            max_tokens=256,
+        )
+        
+        response_text = (response.choices[0].message.content or "").strip()
+        
+        # Extract command if applicable
+        suggested_command = None
+        query_lower = user_query.lower()
+        if any(kw in query_lower for kw in ["command", "run", "next", "what", "how", "try"]):
+            suggested_command = LLMAgent.extract_command(response_text)
+        
+        return ChatResponsePayload(
+            response=response_text,
+            suggested_command=suggested_command,
+            reasoning="LLM Assistant"
+        )
+    
+    except RuntimeError as e:
+        if "Missing" in str(e):
+            detail = "LLM not configured: Set API_BASE_URL, MODEL_NAME, HF_TOKEN"
+        else:
+            detail = f"LLM Error: {str(e)}"
+        raise HTTPException(status_code=503, detail=detail)
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
 
 
 if __name__ == "__main__":

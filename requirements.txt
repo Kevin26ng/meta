@@ -5,3 +5,4 @@ python-multipart==0.0.6
 gymnasium>=1.0.0
 stable-baselines3>=2.3.0
 numpy>=1.26.0
+openai>=1.58.1

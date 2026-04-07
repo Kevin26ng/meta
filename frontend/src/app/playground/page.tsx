@@ -1,12 +1,20 @@
 "use client";
 
-import { Activity, CircleCheck, Circle, Search, History, CheckCircle2, Brain, ChevronDown } from "lucide-react";
+import { Activity, CircleCheck, Circle, Search, History, CheckCircle2, Brain, ChevronDown, Send, Lightbulb, Zap } from "lucide-react";
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
 type LogEntry = {
   type: 'input' | 'output' | 'error' | 'system';
   text: string;
+};
+
+type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  suggested_command?: string;
+  timestamp: number;
 };
 
 export default function PlaygroundPage() {
@@ -41,6 +49,16 @@ function PlaygroundContent() {
   const [selectedModel, setSelectedModel] = useState("ppo");
   const [showModelMenu, setShowModelMenu] = useState(false);
   
+  // Chat panel state
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [showChatPanel, setShowChatPanel] = useState(true);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  
+  const llmModel = availableModels.find(m => m.name === "llm");
+  const llmAvailable = Boolean(llmModel?.available);
+  
   const ws = useRef<WebSocket | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const hasAutoStarted = useRef(false);
@@ -59,21 +77,21 @@ function PlaygroundContent() {
   useEffect(() => {
     async function initEnv() {
       try {
-        // Fetch meta
-        const metaRes = await fetch(`/api/v1/scenarios/${scenarioKey}`);
-        if(metaRes.ok) {
+        const [metaRes, res] = await Promise.all([
+          fetch(`/api/v1/scenarios/${scenarioKey}`),
+          fetch('/api/v1/env/reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scenario: scenarioKey })
+          })
+        ]);
+
+        if (metaRes.ok) {
           setScenarioMeta(await metaRes.json());
         }
 
-        // Reset/Create Env
-        const res = await fetch('/api/v1/env/reset', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scenario: scenarioKey })
-        });
-        
         if (!res.ok) throw new Error("Failed to create environment");
-        
+
         const data = await res.json();
         setEnvId(data.env_id);
         setMaxSteps(data.info?.max_steps || 50);
@@ -148,6 +166,11 @@ function PlaygroundContent() {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
+  // Auto-scroll chat panel
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
+
   // Handle Auto Start Agent
   useEffect(() => {
     if (isReady && autoAgent && !hasAutoStarted.current && envId) {
@@ -159,9 +182,11 @@ function PlaygroundContent() {
   const startAgent = async (type: string, modelName?: string) => {
     if (!envId) return;
     setActiveAgent(type);
-    const mn = modelName || selectedModel;
-    setActiveModelName(mn);
-    const displayName = availableModels.find(m => m.name === mn)?.display_name || mn.toUpperCase();
+    const mn = type === 'llm' ? '' : (modelName || selectedModel);
+    setActiveModelName(type === 'llm' ? 'llm' : mn);
+    const displayName = type === 'llm'
+      ? (availableModels.find(m => m.name === 'llm')?.display_name || 'OpenAI LLM Copilot')
+      : (availableModels.find(m => m.name === mn)?.display_name || mn.toUpperCase());
     setLogs(prev => [...prev, { type: 'system', text: `INITIATING AUTONOMOUS MODE: [${type.toUpperCase()}] Model: ${displayName}` }]);
     try {
       await fetch(`/api/v1/env/${envId}/agent_run`, {
@@ -189,6 +214,53 @@ function PlaygroundContent() {
     }));
     
     setCommand("");
+  };
+
+  const handleChatSubmit = async () => {
+    if (!chatInput.trim() || !envId || isChatLoading) return;
+    
+    const userQuery = chatInput;
+    setChatInput("");
+    
+    // Add user message to chat
+    const userMsg: ChatMessage = {
+      id: `msg-${Date.now()}-user`,
+      role: 'user',
+      content: userQuery,
+      timestamp: Date.now(),
+    };
+    setChatMessages(prev => [...prev, userMsg]);
+    
+    setIsChatLoading(true);
+    try {
+      const res = await fetch(`/api/v1/chat/${envId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: userQuery })
+      });
+      
+      if (!res.ok) throw new Error("Chat request failed");
+      
+      const data = await res.json();
+      const assistantMsg: ChatMessage = {
+        id: `msg-${Date.now()}-assistant`,
+        role: 'assistant',
+        content: data.response,
+        suggested_command: data.suggested_command,
+        timestamp: Date.now(),
+      };
+      setChatMessages(prev => [...prev, assistantMsg]);
+    } catch (err) {
+      console.error("Chat error:", err);
+      setChatMessages(prev => [...prev, {
+        id: `msg-${Date.now()}-error`,
+        role: 'assistant',
+        content: "Error: Could not get response. Check LLM configuration.",
+        timestamp: Date.now(),
+      }]);
+    } finally {
+      setIsChatLoading(false);
+    }
   };
 
   const percentageOptions = {
@@ -279,7 +351,12 @@ function PlaygroundContent() {
               ) : (
                 <div className="flex items-center gap-2">
                   <span className="text-chaos-muted uppercase ml-2 tracking-widest">Auto-Solve:</span>
-                  <button onClick={() => startAgent('llm')} className="text-chaos-muted tracking-widest hover:text-chaos-cyan border border-chaos-border hover:border-chaos-cyan px-2 py-1 rounded transition-colors" title="Auto-Solve with LLM">LLM</button>
+                  <button
+                    onClick={() => llmAvailable && startAgent('llm')}
+                    disabled={!llmAvailable}
+                    className={`text-chaos-muted tracking-widest border border-chaos-border px-2 py-1 rounded transition-colors ${llmAvailable ? 'hover:text-chaos-cyan hover:border-chaos-cyan' : 'opacity-50 cursor-not-allowed'}`}
+                    title={llmAvailable ? 'Auto-Solve with LLM' : 'Configure API_BASE_URL, MODEL_NAME, and HF_TOKEN to enable the LLM'}
+                  >LLM</button>
                   
                   {/* RL Model Selector Dropdown */}
                   <div className="relative">
@@ -383,22 +460,81 @@ function PlaygroundContent() {
       {/* Right Sidebar */}
       <div className="w-[280px] shrink-0 flex flex-col gap-6 h-full overflow-hidden">
         
-        {/* Log History */}
-        <div className="bg-chaos-panel/30 border border-chaos-border p-4 rounded-xl flex-1 flex flex-col overflow-hidden">
-          <div className="flex justify-between items-center mb-6 shrink-0">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-chaos-muted">Command Feed</h3>
-            <History className="w-4 h-4 text-chaos-muted" />
+        {/* AI Chat Assistant */}
+        <div className="bg-chaos-panel/30 border border-chaos-border p-4 rounded-xl flex flex-col overflow-hidden flex-1">
+          <div className="flex justify-between items-center mb-4 shrink-0">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-chaos-muted flex items-center gap-2">
+              <Lightbulb className="w-3.5 h-3.5 text-chaos-cyan" /> AI Assistant
+            </h3>
+            {!llmAvailable && (
+              <span className="text-[8px] text-chaos-muted bg-chaos-muted/20 px-1.5 py-0.5 rounded">OFFLINE</span>
+            )}
           </div>
           
-          <div className="space-y-4 overflow-y-auto flex-1 pr-2">
-            {[...logs].reverse().filter(l => l.type === 'input').map((log, idx) => (
-              <div key={idx} className="flex items-start gap-3 opacity-80">
-                <div className="w-1.5 h-1.5 rounded-full bg-chaos-green mt-1.5"></div>
-                <div className="flex-1 overflow-hidden">
-                  <div className="font-mono text-xs text-chaos-text truncate" title={log.text}>{log.text}</div>
+          {/* Chat messages */}
+          <div className="flex-1 overflow-y-auto mb-3 space-y-3 pr-2">
+            {chatMessages.length === 0 && (
+              <div className="text-[11px] text-chaos-muted/60 italic">
+                Ask the LLM for help with the current task. Get suggestions for the next command to run.
+              </div>
+            )}
+            {chatMessages.map((msg) => (
+              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[90%] rounded-lg px-3 py-2 text-[11px] leading-relaxed ${
+                  msg.role === 'user'
+                    ? 'bg-chaos-cyan/20 border border-chaos-cyan/30 text-chaos-cyan'
+                    : 'bg-chaos-green/10 border border-chaos-green/20 text-chaos-text'
+                }`}>
+                  <div>{msg.content}</div>
+                  {msg.suggested_command && (
+                    <div className="mt-2 pt-2 border-t border-current/20">
+                      <div className="text-[10px] opacity-70 mb-1.5">Suggested command:</div>
+                      <button
+                        onClick={() => {
+                          setCommand(msg.suggested_command!);
+                          setTimeout(() => document.getElementById("cli-input")?.focus(), 0);
+                        }}
+                        className="w-full text-left font-mono text-[10px] bg-chaos-darker/50 px-2 py-1 rounded border border-chaos-border/50 hover:border-chaos-green/50 transition-colors"
+                        title="Click to paste command"
+                      >
+                        <Zap className="w-2.5 h-2.5 inline mr-1" />
+                        {msg.suggested_command.substring(0, 35)}
+                        {msg.suggested_command.length > 35 ? "..." : ""}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
+            {isChatLoading && (
+              <div className="flex justify-start">
+                <div className="bg-chaos-green/10 border border-chaos-green/20 rounded-lg px-3 py-2">
+                  <div className="text-[11px] text-chaos-text animate-pulse">Thinking...</div>
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+          
+          {/* Chat input */}
+          <div className="flex gap-2 shrink-0">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleChatSubmit()}
+              placeholder={llmAvailable ? "Ask for a command..." : "LLM offline"}
+              disabled={!llmAvailable || isChatLoading}
+              className="flex-1 bg-chaos-darker/50 border border-chaos-border/50 rounded px-2 py-1.5 text-[11px] text-chaos-text placeholder-chaos-muted/50 focus:outline-none focus:border-chaos-cyan/50 disabled:opacity-50"
+            />
+            <button
+              onClick={handleChatSubmit}
+              disabled={!llmAvailable || isChatLoading || !chatInput.trim()}
+              className="bg-chaos-cyan/10 border border-chaos-cyan/30 text-chaos-cyan p-1.5 rounded hover:bg-chaos-cyan/20 disabled:opacity-30 transition-colors"
+              title="Send to LLM"
+            >
+              <Send className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </div>

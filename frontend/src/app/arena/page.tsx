@@ -20,28 +20,26 @@ export default function ArenaPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/v1/scenarios")
-      .then(res => res.json())
-      .then(data => {
-        if(data.scenarios) {
-          setScenarios(data.scenarios);
-          if (!data.scenarios["log_analysis"]) {
-             setActiveScenario(Object.keys(data.scenarios)[0]);
+    Promise.all([
+      fetch("/api/v1/scenarios"),
+      fetch("/api/v1/models"),
+    ])
+      .then(async ([scenariosRes, modelsRes]) => {
+        const scenariosData = await scenariosRes.json();
+        if (scenariosData.scenarios) {
+          setScenarios(scenariosData.scenarios);
+          if (!scenariosData.scenarios["log_analysis"]) {
+             setActiveScenario(Object.keys(scenariosData.scenarios)[0]);
           }
         }
+
+        const modelsData = await modelsRes.json();
+        if (modelsData.models) setAvailableModels(modelsData.models);
       })
       .catch(err => {
-        console.error("Could not fetch scenarios", err);
+        console.error("Could not fetch scenarios or models", err);
         setError("Cannot reach backend. Is server.py running?");
       });
-
-    // Fetch available AI models
-    fetch("/api/v1/models")
-      .then(res => res.json())
-      .then(data => {
-        if (data.models) setAvailableModels(data.models);
-      })
-      .catch(err => console.error("Could not fetch models", err));
   }, []);
 
   const runRace = async () => {
@@ -158,7 +156,7 @@ export default function ArenaPage() {
                  onChange={e => setModelA(e.target.value)}
                  className="bg-chaos-dark border border-chaos-border rounded px-3 py-1.5 text-xs font-mono text-chaos-text outline-none focus:border-chaos-green"
                >
-                 {availableModels.map(m => (
+                 {availableModels.filter(m => m.name !== 'llm').map(m => (
                    <option key={m.name} value={m.name} className="bg-chaos-dark">{m.display_name} {m.available ? '✓' : '—'}</option>
                  ))}
                </select>
@@ -215,7 +213,7 @@ export default function ArenaPage() {
                  onChange={e => setModelB(e.target.value)}
                  className="bg-chaos-dark border border-chaos-border rounded px-3 py-1.5 text-xs font-mono text-chaos-text outline-none focus:border-chaos-red"
                >
-                 {availableModels.map(m => (
+                 {availableModels.filter(m => m.name !== 'llm').map(m => (
                    <option key={m.name} value={m.name} className="bg-chaos-dark">{m.display_name} {m.available ? '✓' : '—'}</option>
                  ))}
                </select>

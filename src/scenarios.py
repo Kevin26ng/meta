@@ -15,6 +15,7 @@ modular building blocks, and faults cascade just like in real production.
 from __future__ import annotations
 
 import copy
+from functools import lru_cache
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -757,8 +758,9 @@ SCENARIO_CATALOG: Dict[str, Callable[[], Scenario]] = {
 }
 
 
-def list_scenarios() -> Dict[str, Dict]:
-    """Return metadata for all registered scenarios."""
+@lru_cache(maxsize=1)
+def _cached_list_scenarios() -> Dict[str, Dict]:
+    """Build metadata for all registered scenarios once."""
     result = {}
     for key, factory in SCENARIO_CATALOG.items():
         s = factory()
@@ -772,8 +774,14 @@ def list_scenarios() -> Dict[str, Dict]:
     return result
 
 
-def detail_scenario(key: str) -> Dict[str, Any]:
-    """Return full scenario details including faults, cascades, and objectives."""
+def list_scenarios() -> Dict[str, Dict]:
+    """Return metadata for all registered scenarios."""
+    return copy.deepcopy(_cached_list_scenarios())
+
+
+@lru_cache(maxsize=None)
+def _cached_detail_scenario(key: str) -> Dict[str, Any]:
+    """Build full scenario details once per scenario key."""
     factory = SCENARIO_CATALOG.get(key)
     if not factory:
         raise ValueError(
@@ -818,6 +826,11 @@ def detail_scenario(key: str) -> Dict[str, Any]:
             for o in s.objectives
         ],
     }
+
+
+def detail_scenario(key: str) -> Dict[str, Any]:
+    """Return full scenario details including faults, cascades, and objectives."""
+    return copy.deepcopy(_cached_detail_scenario(key))
 
 
 def load_scenario(key: str) -> Scenario:

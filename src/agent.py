@@ -1,5 +1,10 @@
 import json
+import os
+import re
 from typing import Dict, Any, Optional, List
+
+from openai import OpenAI
+
 from .environment import TrainingEnv
 
 
@@ -89,122 +94,151 @@ class LLMAgent:
     """
     LLM-powered agent that autonomously solves scenarios.
 
-    Requires `litellm` package. Supports any model LiteLLM supports:
-      - openai/gpt-4o, anthropic/claude-3-opus, gemini/gemini-pro, etc.
+    Uses the OpenAI client directly and reads configuration from:
+      - API_BASE_URL
+      - MODEL_NAME
+      - HF_TOKEN
 
     Usage:
-        agent = LLMAgent(model="openai/gpt-4o", api_key="sk-...")
+        agent = LLMAgent()
         result = agent.solve("cascading_db_failure")
     """
 
-    def __init__(self, model: str = "openai/gpt-4o", api_key: Optional[str] = None,
-                 max_turns: int = 30, verbose: bool = False):
-        self.model = model
-        self.api_key = api_key
+    def __init__(
+        self,
+        model: Optional[str] = None,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        max_turns: int = 30,
+        verbose: bool = False,
+    ):
+        self.model = self._normalize_model_name(model or os.environ.get("MODEL_NAME", "gpt-4.1"))
+        self.api_key = api_key or os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY")
+        self.base_url = base_url or os.environ.get("API_BASE_URL")
         self.max_turns = max_turns
         self.verbose = verbose
-        self._litellm = None
+        self._client: Optional[OpenAI] = None
 
-    def _ensure_litellm(self):
-        if self._litellm is None:
-            try:
-                import litellm
-                self._litellm = litellm
-                if self.api_key:
-                    import os
-                    if "openai" in self.model.lower() or "gpt" in self.model.lower():
-                        os.environ["OPENAI_API_KEY"] = self.api_key
-                    elif "anthropic" in self.model.lower() or "claude" in self.model.lower():
-                        os.environ["ANTHROPIC_API_KEY"] = self.api_key
-                    elif "gemini" in self.model.lower():
-                        os.environ["GEMINI_API_KEY"] = self.api_key
-            except ImportError:
-                raise ImportError(
-                    "litellm is required for LLMAgent. Install with: pip install litellm"
+    @staticmethod
+    def _normalize_model_name(model_name: str) -> str:
+        if "/" in model_name:
+            provider, candidate = model_name.split("/", 1)
+            if provider in {"openai", "anthropic", "gemini"}:
+                return candidate
+        return model_name
+
+    def _ensure_client(self) -> OpenAI:
+        if self._client is None:
+            if not self.api_key:
+                raise RuntimeError(
+                    "Missing HF_TOKEN or OPENAI_API_KEY. Set the hackathon environment variables before using the LLM agent."
                 )
+            kwargs: Dict[str, Any] = {"api_key": self.api_key}
+            if self.base_url:
+                kwargs["base_url"] = self.base_url
+            self._client = OpenAI(**kwargs)
+        return self._client
+
+    def _build_messages(self, initial: Dict[str, Any]) -> List[Dict[str, str]]:
+        return [
+            {
+                "role": "system",
+                "content": (
+                    SystemPrompts.get_sys(initial.get("task_name", "linux-sre"))
+                    + "\n\nRespond with a short explanation and a single command."
+                    + "\nPreferred format: ```bash\\n<command>\\n```"
+                ),
+            },
+            {
+                "role": "user",
+                "content": SystemPrompts.format_observation(initial),
+            },
+        ]
 
     def solve(self, scenario: str = "log_analysis") -> Dict[str, Any]:
-        """Run the agent loop: observe → think → act → repeat until done."""
-        self._ensure_litellm()
+        """Run the agent loop: observe, think, act, and repeat until done."""
+        client = self._ensure_client()
 
         worker = AIWorker(scenario=scenario)
         initial = worker.boot()
-
-        messages = [
-            {"role": "system", "content": SystemPrompts.get_sys(
-                initial.get("task_name", scenario))},
-            {"role": "user",
-                "content": SystemPrompts.format_observation(initial)},
-        ]
+        messages = self._build_messages(initial)
 
         turns = []
         for turn in range(self.max_turns):
-            response = self._litellm.completion(
+            response = client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=0.2,
                 max_tokens=512,
             )
-            assistant_msg = response.choices[0].message.content
+            assistant_msg = (response.choices[0].message.content or "").strip()
             messages.append({"role": "assistant", "content": assistant_msg})
 
-            # extract command from response
             command = self._extract_command(assistant_msg)
             if not command:
-                messages.append(
-                    {"role": "user", "content": "Please provide a command to execute."})
+                messages.append({"role": "user", "content": "Return exactly one shell command."})
                 continue
 
             result = worker.invoke(command, rationale=assistant_msg)
-            turns.append({"turn": turn + 1, "command": command,
-                         "score": result["task_score"]})
+            turns.append({"turn": turn + 1, "command": command, "score": result["task_score"]})
 
             if self.verbose:
-                print(
-                    f"[Turn {turn+1}] $ {command}  → score={result['task_score']:.1f}")
+                print(f"[Turn {turn + 1}] $ {command} -> score={result['task_score']:.1f}")
 
             if result["done"]:
                 break
 
-            messages.append({
-                "role": "user",
-                "content": (
-                    f"Command output:\n{result['command_output']}\n\n"
-                    f"Score: {result['task_score']:.1f} | "
-                    f"Step {result['step']}/{result['max_steps']}\n\n"
-                    "What command should we run next?"
-                ),
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"Command output:\n{result['command_output']}\n\n"
+                        f"Score: {result['task_score']:.1f} | Step {result['step']}/{result['max_steps']}\n\n"
+                        "What command should we run next?"
+                    ),
+                }
+            )
 
         summary = worker.report()
         summary["turns"] = turns
         summary["model"] = self.model
+        summary["base_url"] = self.base_url
         return summary
 
     @staticmethod
-    def _extract_command(text: str) -> Optional[str]:
-        """Extract a shell command from LLM response."""
-        import re
-        # try code block first
-        m = re.search(r'```(?:bash|sh|shell)?\s*\n(.+?)\n```', text, re.DOTALL)
-        if m:
-            lines = m.group(1).strip().split("\n")
-            for line in lines:
+    def extract_command(text: str) -> Optional[str]:
+        """Extract a shell command from an LLM response."""
+        try:
+            payload = json.loads(text)
+            if isinstance(payload, dict):
+                command = payload.get("command")
+                if isinstance(command, str) and command.strip():
+                    return command.strip()
+        except Exception:
+            pass
+
+        fenced = re.search(r"```(?:bash|sh|shell)?\s*\n(.+?)\n```", text, re.DOTALL)
+        if fenced:
+            for line in fenced.group(1).strip().split("\n"):
                 line = line.strip()
                 if line and not line.startswith("#"):
                     return line.lstrip("$ ")
-        # try inline backtick
-        m = re.search(r'`([^`]+)`', text)
-        if m:
-            cmd = m.group(1).strip()
-            if " " in cmd or cmd in ("ps", "top", "df", "free", "uptime", "whoami", "hostname"):
-                return cmd
-        # try lines starting with $
+
+        inline = re.search(r"`([^`]+)`", text)
+        if inline:
+            command = inline.group(1).strip()
+            if command:
+                return command
+
         for line in text.split("\n"):
             line = line.strip()
             if line.startswith("$ "):
                 return line[2:]
         return None
+
+    @staticmethod
+    def _extract_command(text: str) -> Optional[str]:
+        return LLMAgent.extract_command(text)
 
 
 # ======================================================================

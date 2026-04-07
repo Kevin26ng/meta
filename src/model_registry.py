@@ -71,6 +71,16 @@ _MODEL_CATALOG: Dict[str, ModelInfo] = {
         requires_training=False,
         available=True,  # always available
     ),
+    "llm": ModelInfo(
+        name="llm",
+        display_name="OpenAI LLM Copilot",
+        algorithm="OpenAI Chat Completions",
+        description="Configured LLM assistant for automated command planning. "
+                    "Uses API_BASE_URL, MODEL_NAME, and HF_TOKEN.",
+        file_path=None,
+        requires_training=False,
+        available=False,
+    ),
 }
 
 
@@ -87,7 +97,14 @@ class ModelRegistry:
 
     def _refresh_availability(self):
         """Check which model files exist on disk."""
+        llm_ready = bool(
+            os.environ.get("API_BASE_URL")
+            and (os.environ.get("MODEL_NAME") or os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY"))
+        )
         for name, info in _MODEL_CATALOG.items():
+            if name == "llm":
+                info.available = llm_ready
+                continue
             if info.file_path and os.path.exists(info.file_path):
                 info.available = True
                 try:
