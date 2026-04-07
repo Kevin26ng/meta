@@ -57,14 +57,19 @@ DEFAULT_EVAL_SCENARIOS = [
 
 def _build_openai_client() -> OpenAI:
     """Build an OpenAI client from hackathon-required environment variables."""
-    api_key = os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY")
+    api_key = os.environ.get("HF_TOKEN", "").strip()
+    base_url = os.environ.get("API_BASE_URL", "").strip()
+    model_name = os.environ.get("MODEL_NAME", "").strip()
+    missing = []
+    if not base_url:
+        missing.append("API_BASE_URL")
+    if not model_name:
+        missing.append("MODEL_NAME")
     if not api_key:
-        raise RuntimeError("Missing HF_TOKEN or OPENAI_API_KEY")
-
-    base_url = os.environ.get("API_BASE_URL")
-    if base_url:
-        return OpenAI(api_key=api_key, base_url=base_url)
-    return OpenAI(api_key=api_key)
+        missing.append("HF_TOKEN")
+    if missing:
+        raise RuntimeError("Missing required environment variables: " + ", ".join(missing))
+    return OpenAI(api_key=api_key, base_url=base_url)
 
 
 def _extract_json(text: str) -> Dict[str, Any]:
@@ -142,7 +147,9 @@ def get_llm_training_plan(default_scenario: str, total_timesteps: int) -> Dict[s
 
     try:
         client = _build_openai_client()
-        model_name = os.environ.get("MODEL_NAME", "gpt-4.1")
+        model_name = os.environ.get("MODEL_NAME", "").strip()
+        if not model_name:
+            raise RuntimeError("Missing MODEL_NAME")
         prompt = (
             "You are an RL training optimizer for Linux SRE command environments. "
             "Return STRICT JSON only with keys: ppo, qlearning. "
@@ -181,7 +188,9 @@ def get_llm_candidate_plans(default_scenario: str, total_timesteps: int, trials:
 
     try:
         client = _build_openai_client()
-        model_name = os.environ.get("MODEL_NAME", "gpt-4.1")
+        model_name = os.environ.get("MODEL_NAME", "").strip()
+        if not model_name:
+            raise RuntimeError("Missing MODEL_NAME")
         prompt = (
             "Return STRICT JSON with structure: {\"candidates\": [ ... ]}. "
             "Provide exactly "

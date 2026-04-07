@@ -13,6 +13,7 @@ Requirements:
 
 import argparse
 import os
+from typing import List
 
 
 def run_llm_agent(scenario: str, model: str):
@@ -23,14 +24,23 @@ def run_llm_agent(scenario: str, model: str):
     print(f"[STARTING LLM AGENT] (Model: {model})")
     print("="*60)
     
-    api_key = os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY", "")
-    base_url = os.environ.get("API_BASE_URL")
-    if not api_key and "gpt" in model.lower():
-        print("Warning: HF_TOKEN/OPENAI_API_KEY not found in environment.")
-        print("You can still run this, but the LLM call will fail without it.")
+    api_key = os.environ.get("HF_TOKEN", "")
+    base_url = os.environ.get("API_BASE_URL", "")
+    effective_model = model or os.environ.get("MODEL_NAME", "")
+    missing: List[str] = []
+    if not base_url:
+        missing.append("API_BASE_URL")
+    if not effective_model:
+        missing.append("MODEL_NAME")
+    if not api_key:
+        missing.append("HF_TOKEN")
+    if missing:
+        print(f"Warning: Missing required environment variables: {', '.join(missing)}")
+        print("LLM mode requires API_BASE_URL, MODEL_NAME, and HF_TOKEN.")
+        return
         
     try:
-        agent = LLMAgent(model=model, api_key=api_key, base_url=base_url, verbose=True)
+        agent = LLMAgent(model=effective_model, api_key=api_key, base_url=base_url, verbose=True)
         result = agent.solve(scenario=scenario)
         
         print("\n[LLM EPISODE FINISHED]")
@@ -109,8 +119,8 @@ if __name__ == "__main__":
                         help="Choose which type of agent to run (llm or rl)")
     parser.add_argument("--scenario", default="disk_space_crisis",
                         help="Which scenario to run (e.g. disk_space_crisis, full_incident)")
-    parser.add_argument("--llm_model", default="openai/gpt-4o",
-                        help="LLM model to use (for LLM mode)")
+    parser.add_argument("--llm_model", default="",
+                        help="LLM model to use (for LLM mode). Defaults to MODEL_NAME env var.")
     parser.add_argument("--rl_algo", type=str, default="PPO",
                         choices=["PPO", "QLEARNING", "HEURISTIC"],
                         help="RL algorithm to use (PPO=neural net, QLEARNING=tabular, HEURISTIC=rule-based)")

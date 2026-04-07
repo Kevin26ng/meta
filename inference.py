@@ -10,9 +10,9 @@ from src.agent import LLMAgent, SystemPrompts
 from src.environment import TrainingEnv
 
 
-API_BASE_URL = os.environ.get("API_BASE_URL")
-MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4.1")
-API_KEY = os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY")
+API_BASE_URL = os.environ.get("API_BASE_URL", "").strip()
+MODEL_NAME = os.environ.get("MODEL_NAME", "").strip()
+API_KEY = os.environ.get("HF_TOKEN", "").strip()
 
 SUCCESS_SCORE_THRESHOLD = 0.8
 MAX_TOTAL_REWARD = 1.0
@@ -43,13 +43,24 @@ def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> No
     print(f"[END] {json.dumps(payload, ensure_ascii=True)}", flush=True)
 
 
-def build_client() -> OpenAI:
+def validate_env_config() -> None:
+    missing: List[str] = []
+    if not API_BASE_URL:
+        missing.append("API_BASE_URL")
+    if not MODEL_NAME:
+        missing.append("MODEL_NAME")
     if not API_KEY:
-        raise RuntimeError("Missing HF_TOKEN or OPENAI_API_KEY for inference.py")
+        missing.append("HF_TOKEN")
+    if missing:
+        raise RuntimeError(
+            "Missing required environment variables for inference.py: "
+            + ", ".join(missing)
+        )
 
-    if API_BASE_URL:
-        return OpenAI(api_key=API_KEY, base_url=API_BASE_URL)
-    return OpenAI(api_key=API_KEY)
+
+def build_client() -> OpenAI:
+    validate_env_config()
+    return OpenAI(api_key=API_KEY, base_url=API_BASE_URL)
 
 
 def make_messages(initial: Dict[str, Any], history: List[str], last_reward: float) -> List[Any]:

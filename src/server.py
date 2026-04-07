@@ -318,43 +318,32 @@ async def run_agent_in_background(env_id: str, agent_type: str, model_name: str 
     try:
         if agent_type == "llm":
             from .agent import LLMAgent
-            import os
-            
-            # Send a system notice that LLM is booting
-            await ws_manager.broadcast(env_id, {"type": "system", "text": "Booting Autonomous LLM via litellm..."})
+
+            # Boot LLM agent with environment-based OpenAI config.
+            await ws_manager.broadcast(env_id, {"type": "system", "text": "Booting Autonomous LLM via OpenAI client..."})
             await wait_briefly()
-            
-            agent = LLMAgent(model="openai/gpt-4o", api_key=os.environ.get("OPENAI_API_KEY", ""), verbose=False)
-            
-            # Since LLMAgent normally runs a while loop on its own and blocks, 
-            # we need to simulate its turns or hook into it.
-            # To intercept and stream to WS, we inject a custom hook into agent.step or just run it via run_in_executor
-            
-            # Actually, `agent.solve` takes scenario string and uses a new env.
-            # We want it to use our existing env.
-            # We can run the loop manually:
-            obs_dict = env.dump()
-            obs_str = f"Dir: {obs_dict.get('cwd', '/')}\nFilesystem:\n{obs_dict.get('filesystem','')}\nProcesses:\n{obs_dict.get('processes','')}"
-            
-            done = False
-            step = 0
-            while not done and step < env.limit:
-                # LLM takes a few seconds to think
-                await ws_manager.broadcast(env_id, {"type": "system", "text": "LLM is thinking..."})
-                await wait_briefly()
-                
-                # We could call real LLM here, but since user permitted dummy for RL maybe dummy for LLM without API key is fine
-                # Or we can just try to run real litellm.
-                # If API key is empty, LLMAgent raises exception.
-                try:
-                    command = agent.turn(obs_str)
-                except Exception as e:
-                    await ws_manager.broadcast(env_id, {"type": "error", "message": f"LLM Error: {str(e)}"})
-                    break
-                    
-                # Broadcast the input exactly like human
+
+            scenario_key = getattr(env, "_scenario_key", "log_analysis")
+            try:
+                agent = LLMAgent(verbose=False)
+                result = agent.solve(scenario=scenario_key)
+            except Exception as e:
+                await ws_manager.broadcast(env_id, {"type": "error", "message": f"LLM Error: {str(e)}"})
+                return
+
+            turns = result.get("turns", [])
+            if not turns:
+                await ws_manager.broadcast(env_id, {"type": "system", "text": "LLM returned no executable commands."})
+                return
+
+            for turn in turns:
+                command = str(turn.get("command", "")).strip()
+                if not command:
+                    continue
+
                 await ws_manager.broadcast(env_id, {"type": "input", "text": command})
-                
+                await wait_briefly()
+
                 res = env.step(command)
                 payload = {
                     "type": "output",
@@ -368,9 +357,8 @@ async def run_agent_in_background(env_id: str, agent_type: str, model_name: str 
                     "exit_code": res["info"]["exit_code"],
                 }
                 await ws_manager.broadcast(env_id, payload)
-                obs_str = res["info"].get("command_output", "")
-                done = res["done"]
-                step += 1
+                if res["done"]:
+                    break
 
         elif agent_type == "rl":
             from src.rl_env import ChaosLabEnv

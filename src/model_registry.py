@@ -99,7 +99,8 @@ class ModelRegistry:
         """Check which model files exist on disk."""
         llm_ready = bool(
             os.environ.get("API_BASE_URL")
-            and (os.environ.get("MODEL_NAME") or os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY"))
+            and os.environ.get("MODEL_NAME")
+            and os.environ.get("HF_TOKEN")
         )
         for name, info in _MODEL_CATALOG.items():
             if name == "llm":

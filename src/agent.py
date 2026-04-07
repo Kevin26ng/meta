@@ -87,7 +87,7 @@ class AIWorker:
 
 
 # ======================================================================
-#  LLM AGENT (optional — requires litellm)
+#  LLM AGENT (OpenAI client)
 # ======================================================================
 
 class LLMAgent:
@@ -112,9 +112,9 @@ class LLMAgent:
         max_turns: int = 30,
         verbose: bool = False,
     ):
-        self.model = self._normalize_model_name(model or os.environ.get("MODEL_NAME", "gpt-4.1"))
-        self.api_key = api_key or os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY")
-        self.base_url = base_url or os.environ.get("API_BASE_URL")
+        self.model = self._normalize_model_name(model or os.environ.get("MODEL_NAME", ""))
+        self.api_key = api_key or os.environ.get("HF_TOKEN", "")
+        self.base_url = base_url or os.environ.get("API_BASE_URL", "")
         self.max_turns = max_turns
         self.verbose = verbose
         self._client: Optional[OpenAI] = None
@@ -129,13 +129,19 @@ class LLMAgent:
 
     def _ensure_client(self) -> OpenAI:
         if self._client is None:
+            missing = []
+            if not self.base_url:
+                missing.append("API_BASE_URL")
+            if not self.model:
+                missing.append("MODEL_NAME")
             if not self.api_key:
+                missing.append("HF_TOKEN")
+            if missing:
                 raise RuntimeError(
-                    "Missing HF_TOKEN or OPENAI_API_KEY. Set the hackathon environment variables before using the LLM agent."
+                    "Missing required environment variables for LLM agent: "
+                    + ", ".join(missing)
                 )
-            kwargs: Dict[str, Any] = {"api_key": self.api_key}
-            if self.base_url:
-                kwargs["base_url"] = self.base_url
+            kwargs: Dict[str, Any] = {"api_key": self.api_key, "base_url": self.base_url}
             self._client = OpenAI(**kwargs)
         return self._client
 
