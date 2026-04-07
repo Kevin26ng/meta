@@ -8,7 +8,7 @@ Usage:
 
 Requirements:
     pip install -r requirements.txt (installs gymnasium and stable-baselines3)
-    pip install litellm (if using LLM mode)
+    Set API_BASE_URL, MODEL_NAME, HF_TOKEN for LLM mode
 """
 
 import argparse
@@ -23,13 +23,14 @@ def run_llm_agent(scenario: str, model: str):
     print(f"[STARTING LLM AGENT] (Model: {model})")
     print("="*60)
     
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    api_key = os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY", "")
+    base_url = os.environ.get("API_BASE_URL")
     if not api_key and "gpt" in model.lower():
-        print("Warning: OPENAI_API_KEY not found in environment.")
+        print("Warning: HF_TOKEN/OPENAI_API_KEY not found in environment.")
         print("You can still run this, but the LLM call will fail without it.")
         
     try:
-        agent = LLMAgent(model=model, api_key=api_key, verbose=True)
+        agent = LLMAgent(model=model, api_key=api_key, base_url=base_url, verbose=True)
         result = agent.solve(scenario=scenario)
         
         print("\n[LLM EPISODE FINISHED]")
@@ -37,7 +38,7 @@ def run_llm_agent(scenario: str, model: str):
         print(f"Steps Used:  {result['steps_used']} / {result['max_steps']}")
         print(f"Completed:   {result['completed']}")
     except ImportError:
-        print("Error: You need to install litellm first: pip install litellm")
+        print("Error: Missing dependencies. Run: pip install -r requirements.txt")
 
 
 def run_rl_agent(scenario: str, algo: str = "PPO", timesteps: int = 5000):
