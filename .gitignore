@@ -1,0 +1,17 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local runtime logs/artifacts
+pytest_out.txt
+pytest_utf8.txt
+stdout.txt
+
+# Local environments
+.venv/
+venv/
+
+# OS/editor
+.DS_Store
+Thumbs.db

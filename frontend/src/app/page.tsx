@@ -19,17 +19,48 @@ export default function HubPage() {
   const searchQuery = searchParams.get("search") || "";
 
   const [scenarios, setScenarios] = useState<Record<string, any>>({});
+  const [backendReachable, setBackendReachable] = useState<boolean>(true);
   const [complexityFilter, setComplexityFilter] = useState<string | null>(null);
   const [complexityOpen, setComplexityOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/v1/scenarios")
-      .then(r => r.json())
-      .then(data => {
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const loadScenarios = async () => {
+      try {
+        const response = await fetch("/api/v1/scenarios", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`Unexpected status ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (cancelled) {
+          return;
+        }
+
         setScenarios(data.scenarios || {});
-      })
-      .catch(console.error);
+        setBackendReachable(true);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setBackendReachable(false);
+        console.error(error);
+        retryTimer = setTimeout(loadScenarios, 2000);
+      }
+    };
+
+    loadScenarios();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
+    };
   }, []);
 
   // Close dropdown on outside click
@@ -187,7 +218,11 @@ export default function HubPage() {
         <div className="text-center py-12 bg-chaos-panel/30 border border-chaos-border rounded-lg mb-12">
           <Activity className="w-10 h-10 text-chaos-muted mx-auto mb-4 animate-pulse" />
           <h3 className="text-lg font-bold text-chaos-text">Waiting for Backend</h3>
-          <p className="text-chaos-muted">Run the Python backend to view live scenarios.</p>
+          <p className="text-chaos-muted">
+            {backendReachable
+              ? "Loading live scenarios..."
+              : "Backend not reachable yet. Retrying automatically..."}
+          </p>
         </div>
       )}
 

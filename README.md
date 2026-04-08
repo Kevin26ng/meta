@@ -1,397 +1,157 @@
-# Linux System SRE Environment - OpenEnv Hackathon Project
+# ChaosLab: AI SRE Training Environment
 
-## 🎯 Project Overview
+ChaosLab is a production-style training environment for AI agents to practice Linux/SRE incident response.
+It combines a virtual Linux system, objective scoring, RL agents, and optional OpenAI-powered assistance.
 
-<<<<<<< HEAD
-**Linux System SRE Environment** is an agentic training environment that simulates real-world Linux System Reliability Engineer (SRE) tasks. It's designed for AI agents to learn and practice critical infrastructure troubleshooting, demonstrating the **"agentic" workflow** that judges value.
-=======
-**Linux System SRE Environment** is an agentic training environment that simulates real-world Linux System Reliability Engineer (SRE) tasks. It's designed for AI agents to learn and practice critical infrastructure troubleshooting.
->>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
+## Why this project is strong for hackathons
 
-### Why This Project?
+- Real agentic workflow: agents execute shell commands, inspect outputs, and recover systems.
+- Objective scoring: scenarios return measurable progress and completion scores.
+- Practical scope: incident-response workflows map to real SRE tasks.
+- Interactive demoability: complete web UI (Hub, Playground, Arena, Builder).
 
-- **Agentic Workflow**: AI agents actively solve problems via terminal commands, not just chat
-- **Objective Grading**: Binary verification of terminal outputs and file states
-- **Partial Progress Tracking**: Rewards stages (0.2, 0.5, 1.0) to show learning progression
-- **Low Resource Footprint**: Pure Python, no GPU, runs anywhere
-- **Industry-Aligned**: Focuses on real SRE domain (log analysis, permissions, process recovery)
+## Core features
 
-## 🚀 Features
+- Virtual Linux environment with deterministic reset/step loop.
+- 11 scenarios from simple log triage to full cascading incidents.
+- Terminal emulator with realistic command flows.
+- FastAPI backend with REST and WebSocket streaming.
+- Next.js frontend for scenario browsing, live command execution, and benchmarking.
+- Multiple agent modes (heuristic, RL, optional LLM guidance).
+- Arena mode for side-by-side agent comparisons.
+- Root-level inference.py for submission/runtime compatibility.
 
-### Three Progressive Tasks
+## Architecture
 
-1. **Easy**: Log Analysis
-   - Find a specific error in application logs
-   - Demonstrate: `cat`, `grep` commands
-   - Grading: Binary (0.0 or 1.0)
+- Backend: src/server.py, src/environment.py, src/scenarios.py, src/terminal_emulator.py
+- Agents: src/agent.py, src/train_ai.py, model registry under models/
+- Frontend: frontend/src/app/*
+- Inference entrypoint: inference.py
 
-<<<<<<< HEAD
-2. **Medium**: Permission Repair  
-=======
-2. **Medium**: Permission Repair
->>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
-   - Make a script executable via `chmod`
-   - Demonstrate: Permission tools, verification
-   - Grading: Staged (0.0, 0.5, 1.0)
+## Quick start
 
-3. **Hard**: Process Recovery
-   - Diagnose and restart a dead service
-   - Demonstrate: Process management, service control
-   - Grading: Multi-stage (0.2, 0.5, 1.0)
+### 1) Prerequisites
 
-### Core Components
+- Python 3.11+
+- Node.js 18+
+- npm
 
-```
-src/
-├── virtual_filesystem.py    # Dict-based Linux filesystem mock
-├── terminal_emulator.py     # Shell command parser & executor
-├── tasks.py                 # Task definitions & grading logic
-├── environment.py           # OpenEnv-compliant API (reset/step)
-├── agent.py                 # LLM agent integration interface
-└── server.py                # FastAPI REST API endpoints
-```
-
-## 📋 OpenEnv Compliance
-
-### API Endpoints
+### 2) Install dependencies
 
 ```bash
-# Reset environment
-POST /api/v1/env/reset
-{
-  "difficulty": "medium"  # easy, medium, or hard
-}
-
-# Execute command
-POST /api/v1/env/{env_id}/step
-{
-  "env_id": "env_0",
-  "action": "cat /var/log/app.log"
-}
-
-# Get task info
-GET /api/v1/tasks
-GET /api/v1/tasks/{difficulty}
-
-# Debugging
-GET /api/v1/env/{env_id}/state
-```
-
-### Observation Format
-
-```python
-{
-  "current_directory": "/home/user",
-  "processes": "PID\tNAME\t\tSTATUS\n1024\tnginx\t\tRUNNING\n5432\tpostgres\t\tDEAD",
-  "filesystem": "cleanup.sh\nsetup.sh",
-  "task_name": "Permission Repair",
-  "task_description": "Fix file permissions for a shell script"
-}
-```
-
-### Reward Structure
-
-- **Step penalty**: -0.01 (encourages efficiency)
-- **Progress bonus**: +0.5 per stage completion
-- **Completion bonus**: +0.5 (total max 1.0 per task)
-
-## 🔧 Installation
-
-### Quick Start
-
-```bash
-# Clone/download project
-cd linux-sre-env
-
-# Install dependencies
+# from repo root
 pip install -r requirements.txt
 
-# Run demo
-python demo.py
-
-# Start server
-python -m uvicorn src.server:app --reload
+# frontend deps
+cd frontend
+npm install
+cd ..
 ```
 
-### Docker
+### 3) Start backend
 
 ```bash
-# Build
-docker build -t linux-sre-env .
-
-# Run
-docker run -p 8000:8000 linux-sre-env
-
-# Interactive
-docker run -it linux-sre-env python demo.py
+python -m uvicorn src.server:app --host 127.0.0.1 --port 8000
 ```
 
-## 💻 Usage Examples
-
-### Direct Environment Usage
-
-```python
-from src.environment import LinuxSREEnvironment
-
-env = LinuxSREEnvironment(task_difficulty="medium")
-obs = env.reset()
-
-# Execute commands
-result = env.step("chmod 0755 /home/user/scripts/cleanup.sh")
-print(f"Score: {result['info']['task_score']}")
-print(f"Done: {result['done']}")
-```
-
-### LLM Agent Integration
-
-```python
-from src.agent import AgentInterface, AgentPromptGenerator
-
-# Setup agent
-agent = AgentInterface(task_difficulty="hard")
-initial_state = agent.reset()
-
-# Get system prompt for LLM
-system_prompt = AgentPromptGenerator.get_system_prompt("hard")
-
-# Execute agent commands
-result = agent.execute_command(
-    "ps | grep postgres",
-    agent_reasoning="Check postgres status"
-)
-
-# Get summary
-summary = agent.get_episode_summary()
-print(f"Final Score: {summary['final_score']}")
-```
-
-### REST API Usage
+### 4) Start frontend
 
 ```bash
-# Reset environment
-curl -X POST http://localhost:8000/api/v1/env/reset \
+cd frontend
+npm run dev
+```
+
+### 5) Open the app
+
+- Frontend: http://localhost:3000
+- Backend health: http://127.0.0.1:8000/health
+
+## Optional LLM setup
+
+Set these environment variables before starting backend if you want LLM features:
+
+```bash
+API_BASE_URL=https://api.openai.com/v1
+MODEL_NAME=gpt-4o-mini
+HF_TOKEN=<your_api_key>
+```
+
+Notes:
+
+- The project uses OpenAI-compatible client flow for LLM calls.
+- If unset, non-LLM features still work.
+
+## How to use the website
+
+1. Hub (/): pick a scenario.
+2. Playground (/playground): initialize sandbox and run commands.
+3. Arena (/arena): compare agent performance on the same scenario.
+4. Builder (/builder): inspect and compose scenario configurations.
+
+Typical Playground loop:
+
+1. Initialize/reset scenario sandbox.
+2. Run diagnostic commands (ls, ps, cat, grep, etc.).
+3. Apply fixes (chmod, service restart, config corrections, cleanup).
+4. Track objective/score progress until completion.
+
+## API quick checks
+
+```bash
+# health
+curl http://127.0.0.1:8000/health
+
+# list scenarios
+curl http://127.0.0.1:8000/api/v1/scenarios
+
+# reset env
+curl -X POST http://127.0.0.1:8000/api/v1/env/reset \
   -H "Content-Type: application/json" \
-  -d '{"difficulty": "hard"}'
-
-# Execute command
-curl -X POST http://localhost:8000/api/v1/env/env_0/step \
-  -H "Content-Type: application/json" \
-  -d '{
-    "env_id": "env_0",
-    "action": "ps | grep postgres"
-  }'
+  -d '{"scenario": "log_analysis"}'
 ```
 
-## 🧪 Testing
+## Training and inference
 
 ```bash
-# Run included tests
-python -m pytest tests/
+# training options
+python src/train_ai.py --help
 
-# Run demo with all difficulties
-python demo.py
-
-# Test each task
-python -c "from src.environment import LinuxSREEnvironment; env = LinuxSREEnvironment('easy'); env.reset(); env.step('grep 500 /var/log/app.log')"
+# submission/runtime entrypoint
+python inference.py --help
 ```
 
-## 📊 Performance Metrics
+## Submission/readiness notes
 
-### Efficiency Scoring
+- Root inference.py is present.
+- Backend and frontend run locally with live interaction.
+- Scenario APIs and WebSocket stream are active.
+- Arena and model registry endpoints are integrated in UI.
 
-- **Easy task**: Typically solvable in 2-3 steps
-<<<<<<< HEAD
-- **Medium task**: 3-5 steps  
-=======
-- **Medium task**: 3-5 steps
->>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
-- **Hard task**: 5-8 steps
+## Key files
 
-### Agent Baseline
-
-Expected LLM agent performance:
-<<<<<<< HEAD
-=======
-
->>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
-- OpenAI GPT-4: 85-95% success rate
-- GPT-3.5: 70-80% success rate
-- Partial credit for staged recovery attempts
-
-## 🎓 Why This Design Works for Judges
-
-### 1. **Demonstrates "Agentic" Capability**
-<<<<<<< HEAD
-=======
-
->>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
-- AI doesn't just chat—it performs real work
-- Terminal interaction shows agency
-- Multi-step execution shows planning
-
-### 2. **Objective, Binary Grading**
-<<<<<<< HEAD
-=======
-
->>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
-- File states can be verified with `os.access()`, `permissions`
-- Process status is definitive (running/dead)
-- No subjective evaluation needed
-
-### 3. **Shows Partial Progress**
-<<<<<<< HEAD
-=======
-
->>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
-- Tasks designed in stages (0.2 → 0.5 → 1.0)
-- Agents get credit for attempting recovery
-- Reward structure directly maps to progress
-
-### 4. **Low Resource Footprint**
-<<<<<<< HEAD
-=======
-
->>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
-- Pure Python, no heavy dependencies
-- Dict-based virtual filesystem (no disk I/O)
-- Runs on minimal hardware
-- No GPU required
-
-### 5. **Algorithm Over Data Scale**
-<<<<<<< HEAD
-=======
-
->>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
-- Wins with smart approaches, not raw compute
-- Better command sequence = higher score
-- Encourages algorithm exploration
-
-### 6. **Real Industry Value**
-<<<<<<< HEAD
-- SRE domain is hot topic
-- Mirrors actual troubleshooting workflows  
-=======
-
-- SRE domain is hot topic
-- Mirrors actual troubleshooting workflows
->>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
-- Skills transfer to real systems
-- Judges recognize value immediately
-
-## 🔬 Architecture Highlights
-
-### Virtual Filesystem Design
-
-Pure dictionary-based simulation provides:
-<<<<<<< HEAD
-=======
-
->>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
-- Instant reset capability
-- Perfect reproducibility
-- No side effects on host system
-- Easy state inspection for verification
-
-### Terminal Emulator
-
-Restricted command set balances:
-<<<<<<< HEAD
-=======
-
->>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
-- Enough power for meaningful tasks
-- Safety (no destructive commands)
-- Predictable grading (no stochasticity)
-- Clear success/failure signals
-
-### Task Grading
-
-Progressive scoring enables:
-<<<<<<< HEAD
-=======
-
->>>>>>> 69d7d04 (Enchancement in Environment for real world transition)
-- Partial credit for learning attempts
-- Encouragement for multi-stage recovery
-- Clear milestone tracking
-- Reward shaping for agent learning
-
-## 📚 Project Structure
-
-```
-linux-sre-env/
-├── src/
-│   ├── __init__.py
-│   ├── virtual_filesystem.py      # Virtual file system
-│   ├── terminal_emulator.py       # Command parser
-│   ├── tasks.py                   # Task definitions
-│   ├── environment.py             # Main environment class
-│   ├── agent.py                   # LLM integration
-│   └── server.py                  # REST API
-├── tests/
-│   └── test_environment.py        # Unit tests
-├── demo.py                         # Demonstration
-├── requirements.txt                # Dependencies
-├── Dockerfile                      # Container setup
-├── README.md                       # This file
-├── SUBMISSION.md                   # Hackathon submission
-└── openenv.yaml                    # Configuration
+```text
+src/
+  environment.py
+  scenarios.py
+  terminal_emulator.py
+  agent.py
+  server.py
+  train_ai.py
+frontend/
+  src/app/page.tsx
+  src/app/playground/page.tsx
+  src/app/arena/page.tsx
+  src/app/builder/page.tsx
+inference.py
+openenv.yaml
 ```
 
-## 🏆 Competitive Advantages
+## Troubleshooting
 
-1. **Clear Agentic Workflow**: Judges see AI doing productive work, not just responding
-2. **Verifiable Progress**: Partial credit system shows learning at each stage
-3. **Reproducible Results**: Same task, same difficulty = same score calculation
-4. **Industry Realism**: SRE tasks mirror real-world troubleshooting
-5. **Minimal Dependencies**: Runs anywhere with Python 3.11+
-6. **Well-Structured Code**: Clear separation of concerns, easy to understand
-7. **Comprehensive Documentation**: Easy for judges to evaluate
+- Port 8000 already in use: stop old backend process and restart.
+- Frontend says backend unavailable: verify http://127.0.0.1:8000/health.
+- LLM unavailable in UI: verify API_BASE_URL, MODEL_NAME, HF_TOKEN.
 
-## 🎯 Success Metrics
+## License
 
-When judging this project, look for:
-
-- ✅ **Environment resets cleanly** - Perfect reproducibility
-- ✅ **Tasks grade correctly** - Grading logic is objective and verifiable
-- ✅ **Agents can solve tasks** - Supports GPT-4 via REST API
-- ✅ **Partial credit awarded** - Shows learning progression
-- ✅ **Runs without GPU** - Highly portable
-- ✅ **Clean code architecture** - Easy to understand design
-- ✅ **Real domain value** - SRE is hot topic in production systems
-
-## 🚢 Deployment
-
-### Cloud Ready
-
-```bash
-# Google Cloud Run
-gcloud run deploy linux-sre-env \
-  --source . \
-  --platform managed \
-  --region us-central1
-
-# AWS ECS
-aws ecs register-task-definition --cli-input-json file://task-def.json
-```
-
-### Scalability
-
-- Stateless API (no persistent state)
-- Environment instances isolated
-- Horizontal scaling ready
-- REST API suitable for agent farms
-
-## 📖 References
-
-- [OpenEnv Framework](https://openenv.org)
-- [FastAPI Documentation](https://fastapi.tiangolo.com)
-- [Pydantic Models](https://docs.pydantic.dev)
-
-## 📝 License
-
-This project is provided as-is for the OpenEnv Hackathon.
-
----
-
-**Happy troubleshooting! May your agentic workflows be efficient and your grading scores be high! 🚀**
+Provided for hackathon development and evaluation.

@@ -60,6 +60,7 @@ function PlaygroundContent() {
   const llmAvailable = Boolean(llmModel?.available);
   
   const ws = useRef<WebSocket | null>(null);
+  const wsIntentionalClose = useRef(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const hasAutoStarted = useRef(false);
 
@@ -70,7 +71,7 @@ function PlaygroundContent() {
       .then(data => {
         if (data.models) setAvailableModels(data.models);
       })
-      .catch(err => console.error("Could not fetch models", err));
+        .catch(err => console.warn("Could not fetch models", err));
   }, []);
 
   // Fetch Scenario Meta & Init environment
@@ -102,7 +103,7 @@ function PlaygroundContent() {
         ]);
 
       } catch (e) {
-        console.error(e);
+        console.warn("Playground init failed", e);
         setLogs([{ type: 'error', text: 'FATAL: Cannot reach backend server at localhost:8000. Ensure server.py is running.' }]);
         setStatusText("DISCONNECTED");
       }
@@ -120,7 +121,9 @@ function PlaygroundContent() {
     if (!envId) return;
 
     setStatusText("CONNECTING WS...");
-    const socket = new WebSocket(`ws://127.0.0.1:8000/ws/env/${envId}`);
+    wsIntentionalClose.current = false;
+    const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const socket = new WebSocket(`${wsProtocol}://${window.location.host}/ws/env/${envId}`);
     ws.current = socket;
 
     socket.onopen = () => {
@@ -151,12 +154,14 @@ function PlaygroundContent() {
       setStatusText("OFFLINE");
     };
 
-    socket.onerror = (e) => {
-      console.error("WS Error", e);
+    socket.onerror = () => {
+      if (wsIntentionalClose.current) return;
+      console.warn("WS connection issue detected");
       setStatusText("CONNECTION ERROR");
     };
 
     return () => {
+      wsIntentionalClose.current = true;
       socket.close();
     };
   }, [envId]);
@@ -195,7 +200,7 @@ function PlaygroundContent() {
         body: JSON.stringify({ agent_type: type, model_name: mn })
       });
     } catch(e) {
-      console.error(e);
+      console.warn("Agent start failed", e);
       setActiveAgent(null);
       setActiveModelName(null);
     }
@@ -251,7 +256,7 @@ function PlaygroundContent() {
       };
       setChatMessages(prev => [...prev, assistantMsg]);
     } catch (err) {
-      console.error("Chat error:", err);
+      console.warn("Chat error:", err);
       setChatMessages(prev => [...prev, {
         id: `msg-${Date.now()}-error`,
         role: 'assistant',
