@@ -70,6 +70,7 @@ class StepOut(BaseModel):
 async def root():
     return {"status": "ok", "service": "linux-sre-env", "version": "2.0.0", "docs": "/docs"}
 
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "service": "linux-sre-env", "version": "2.0.0"}
@@ -130,7 +131,8 @@ async def get_model(name: str):
     registry = get_registry()
     info = registry.get_model_info(name)
     if not info:
-        raise HTTPException(status_code=404, detail=f"Model '{name}' not found")
+        raise HTTPException(
+            status_code=404, detail=f"Model '{name}' not found")
     return info
 
 
@@ -182,6 +184,25 @@ async def delete_env(env_id: str):
             status_code=404, detail=f"Environment '{env_id}' not found")
     del backends[env_id]
     return {"status": "deleted", "env_id": env_id}
+
+
+# ======================================================================
+#  TOP-LEVEL OpenEnv ALIASES  (validators may hit /reset, /step, /state)
+# ======================================================================
+
+@app.post("/reset")
+async def reset_alias(req: ResetPayload):
+    return await reset(req)
+
+
+@app.post("/step/{env_id}")
+async def step_alias(env_id: str, req: StepPayload):
+    return await step(env_id, req)
+
+
+@app.get("/state/{env_id}")
+async def state_alias(env_id: str):
+    return await get_state(env_id)
 
 
 @app.get("/api/v1/env")
@@ -310,7 +331,8 @@ async def ws_terminal(ws: WebSocket, env_id: str):
 
 class AgentRunPayload(BaseModel):
     agent_type: str = Field(description="Agent type: llm or rl")
-    model_name: str = Field(default="ppo", description="Model name for RL agent (ppo, a2c, heuristic)")
+    model_name: str = Field(
+        default="ppo", description="Model name for RL agent (ppo, a2c, heuristic)")
 
 
 async def run_agent_in_background(env_id: str, agent_type: str, model_name: str = "ppo"):
@@ -439,7 +461,8 @@ async def start_agent_run(env_id: str, req: AgentRunPayload, background_tasks: B
     if env_id not in backends:
         raise HTTPException(status_code=404, detail="Environment not found")
 
-    background_tasks.add_task(run_agent_in_background, env_id, req.agent_type, req.model_name)
+    background_tasks.add_task(run_agent_in_background,
+                              env_id, req.agent_type, req.model_name)
     return {"status": "started", "agent_type": req.agent_type, "model_name": req.model_name}
 
 
@@ -448,7 +471,8 @@ async def start_agent_run(env_id: str, req: AgentRunPayload, background_tasks: B
 # ======================================================================
 
 class ChatQueryPayload(BaseModel):
-    query: str = Field(description="User question or request for LLM assistance")
+    query: str = Field(
+        description="User question or request for LLM assistance")
 
 
 class ChatResponsePayload(BaseModel):
@@ -463,17 +487,21 @@ class ArenaPayload(BaseModel):
     commands_b: List[str] = Field(description="Commands for Agent B")
     label_a: str = Field(default="Agent A")
     label_b: str = Field(default="Agent B")
-    type_a: str = Field(default="script", description="Type of agent: script, llm, rl")
-    type_b: str = Field(default="script", description="Type of agent: script, llm, rl")
-    model_a: str = Field(default="ppo", description="Model name for Agent A (if type is rl)")
-    model_b: str = Field(default="heuristic", description="Model name for Agent B (if type is rl)")
+    type_a: str = Field(
+        default="script", description="Type of agent: script, llm, rl")
+    type_b: str = Field(
+        default="script", description="Type of agent: script, llm, rl")
+    model_a: str = Field(
+        default="ppo", description="Model name for Agent A (if type is rl)")
+    model_b: str = Field(default="heuristic",
+                         description="Model name for Agent B (if type is rl)")
 
 
 @app.post("/api/v1/arena/run")
 async def arena_run(req: ArenaPayload):
     """Run two command sequences or autonomous agents on the same scenario and compare scores."""
     results = {}
-    
+
     agent_configs = [
         (req.label_a, req.type_a, req.commands_a, req.model_a),
         (req.label_b, req.type_b, req.commands_b, req.model_b),
@@ -496,7 +524,7 @@ async def arena_run(req: ArenaPayload):
                     history.append({
                         "command": turn["command"],
                         "score": turn["score"],
-                        "exit_code": 0, # Simplify
+                        "exit_code": 0,  # Simplify
                     })
                 final_score = res["final_score"]
                 steps_used = res["steps_used"]
@@ -507,7 +535,7 @@ async def arena_run(req: ArenaPayload):
                     "score": 0.0,
                     "exit_code": 1
                 })
-        
+
         elif agent_type == "rl":
             # Run RL Agent using the model registry
             try:
@@ -601,13 +629,13 @@ async def chat_assistant(env_id: str, req: ChatQueryPayload) -> ChatResponsePayl
     """
     if env_id not in backends:
         raise HTTPException(status_code=404, detail="Environment not found")
-    
+
     try:
         from .agent import LLMAgent
-        
+
         env = backends[env_id]
         user_query = req.query.strip()
-        
+
         # Build context safely
         context = "You are a Linux SRE assistant helping solve system tasks.\n"
         try:
@@ -615,22 +643,22 @@ async def chat_assistant(env_id: str, req: ChatQueryPayload) -> ChatResponsePayl
             context += f"Task Desc: {env.task.desc}\n"
         except:
             context += "Task: Unknown\n"
-        
+
         try:
             context += f"Score: {env.score} | Steps: {env.step_count}/{env.limit}\n"
         except:
             pass
-        
+
         # Initialize LLM agent
         llm_agent = LLMAgent(verbose=False)
         client = llm_agent._ensure_client()
-        
+
         # Build messages
         messages = [
             {
                 "role": "system",
                 "content": (
-                    context + 
+                    context +
                     "\nYou are helpful and concise. Suggest specific shell commands for the current task. "
                     "Respond in 1-2 sentences."
                 ),
@@ -640,7 +668,7 @@ async def chat_assistant(env_id: str, req: ChatQueryPayload) -> ChatResponsePayl
                 "content": user_query,
             },
         ]
-        
+
         # Get LLM response
         response = client.chat.completions.create(
             model=llm_agent.model,
@@ -648,28 +676,28 @@ async def chat_assistant(env_id: str, req: ChatQueryPayload) -> ChatResponsePayl
             temperature=0.2,
             max_tokens=256,
         )
-        
+
         response_text = (response.choices[0].message.content or "").strip()
-        
+
         # Extract command if applicable
         suggested_command = None
         query_lower = user_query.lower()
         if any(kw in query_lower for kw in ["command", "run", "next", "what", "how", "try"]):
             suggested_command = LLMAgent.extract_command(response_text)
-        
+
         return ChatResponsePayload(
             response=response_text,
             suggested_command=suggested_command,
             reasoning="LLM Assistant"
         )
-    
+
     except RuntimeError as e:
         if "Missing" in str(e):
             detail = "LLM not configured: Set API_BASE_URL, MODEL_NAME, HF_TOKEN"
         else:
             detail = f"LLM Error: {str(e)}"
         raise HTTPException(status_code=503, detail=detail)
-    
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
 
