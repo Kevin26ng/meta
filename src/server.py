@@ -66,6 +66,10 @@ class StepOut(BaseModel):
 #  HEALTH + TASKS
 # ======================================================================
 
+@app.get("/")
+async def root():
+    return {"status": "ok", "service": "linux-sre-env", "version": "2.0.0", "docs": "/docs"}
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "service": "linux-sre-env", "version": "2.0.0"}
