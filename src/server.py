@@ -223,7 +223,8 @@ async def step_alias(req: StepPayload, env_id: Optional[str] = None):
     if env_id is None and backends:
         env_id = list(backends.keys())[-1]
     if not env_id or env_id not in backends:
-        raise HTTPException(status_code=404, detail="No active environment. Call /reset first.")
+        raise HTTPException(
+            status_code=404, detail="No active environment. Call /reset first.")
     return await step(env_id, req)
 
 
@@ -238,7 +239,8 @@ async def state_alias(env_id: Optional[str] = None):
     if env_id is None and backends:
         env_id = list(backends.keys())[-1]
     if not env_id or env_id not in backends:
-        raise HTTPException(status_code=404, detail="No active environment. Call /reset first.")
+        raise HTTPException(
+            status_code=404, detail="No active environment. Call /reset first.")
     return await get_state(env_id)
 
 
