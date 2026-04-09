@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import os
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from openai import OpenAI
@@ -32,7 +33,13 @@ def _safe_float(raw: str, default: float) -> float:
 MAX_STEPS_OVERRIDE = _safe_int(os.getenv("MAX_STEPS", "0"), 0)
 TEMPERATURE = _safe_float(os.getenv("INFER_TEMPERATURE", "0.2"), 0.2)
 MAX_TOKENS = _safe_int(os.getenv("INFER_MAX_TOKENS", "320"), 320)
-SUCCESS_SCORE_THRESHOLD = _safe_float(os.getenv("SUCCESS_SCORE_THRESHOLD", "0.8"), 0.8)
+SUCCESS_SCORE_THRESHOLD = _safe_float(
+    os.getenv("SUCCESS_SCORE_THRESHOLD", "0.8"), 0.8)
+GLOBAL_TIMEOUT = _safe_int(
+    os.getenv("GLOBAL_TIMEOUT", "1140"), 1140)  # 19 min (1 min buffer)
+PER_TASK_TIMEOUT = _safe_int(
+    os.getenv("PER_TASK_TIMEOUT", "180"), 180)  # 3 min per task
+MAX_STEPS_CAP = 15  # hard cap per task to stay within runtime budget
 
 
 def validate_required_env() -> None:
@@ -44,7 +51,8 @@ def validate_required_env() -> None:
     if not HF_TOKEN:
         missing.append("HF_TOKEN")
     if missing:
-        raise RuntimeError("Missing required environment variables: " + ", ".join(missing))
+        raise RuntimeError(
+            "Missing required environment variables: " + ", ".join(missing))
 
 
 def _bool_text(value: bool) -> str:
@@ -110,7 +118,8 @@ def decide_action(
     last_reward: float,
 ) -> Tuple[str, Optional[str]]:
     try:
-        messages: List[Any] = build_messages(initial, history, step, last_reward)
+        messages: List[Any] = build_messages(
+            initial, history, step, last_reward)
         response: Any = client.chat.completions.create(
             model=MODEL_NAME,
             messages=messages,
@@ -146,16 +155,21 @@ async def run_task(task_key: str) -> None:
     success = False
     last_reward = 0.0
 
-    max_steps = MAX_STEPS_OVERRIDE if MAX_STEPS_OVERRIDE > 0 else int(reset_out["info"]["max_steps"])
+    max_steps = MAX_STEPS_OVERRIDE if MAX_STEPS_OVERRIDE > 0 else min(
+        int(reset_out["info"]["max_steps"]), MAX_STEPS_CAP)
 
     log_start(task=task_key, env=BENCHMARK, model=MODEL_NAME)
+    task_start = time.monotonic()
 
     try:
         for step in range(1, max_steps + 1):
             if env.finished:
                 break
+            if time.monotonic() - task_start > PER_TASK_TIMEOUT:
+                break
 
-            command, model_error = decide_action(client, prompt_state, history, step, last_reward)
+            command, model_error = decide_action(
+                client, prompt_state, history, step, last_reward)
             result = env.step(command)
 
             reward = float(result.get("reward") or 0.0)
@@ -175,7 +189,8 @@ async def run_task(task_key: str) -> None:
             steps_taken = step
             last_reward = reward
 
-            log_step(step=step, action=command, reward=reward, done=done, error=step_error)
+            log_step(step=step, action=command, reward=reward,
+                     done=done, error=step_error)
             history.append(f"step={step} action={command} reward={reward:.2f}")
 
             if done:
@@ -195,19 +210,28 @@ async def run_task(task_key: str) -> None:
         )
 
     finally:
-        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+        log_end(success=success, steps=steps_taken,
+                score=score, rewards=rewards)
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(description="Custom OpenEnv inference runner.")
-    parser.add_argument("--task", default="log_analysis", help="Scenario key to run")
-    parser.add_argument("--all", action="store_true", help="Run every available task")
+    parser = argparse.ArgumentParser(
+        description="Custom OpenEnv inference runner.")
+    parser.add_argument("--task", default="log_analysis",
+                        help="Scenario key to run")
+    parser.add_argument("--all", action="store_true",
+                        help="Run every available task")
     args = parser.parse_args()
 
     validate_required_env()
 
     task_keys = TrainingEnv.avail_tasks() if args.all else [args.task]
+    global_start = time.monotonic()
     for key in task_keys:
+        if time.monotonic() - global_start > GLOBAL_TIMEOUT:
+            print(
+                f"[END] success=false steps=0 score=0.000 rewards= # skipped (global timeout)", flush=True)
+            break
         await run_task(key)
 
 

@@ -32,7 +32,7 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
 # Default command: run server
-CMD ["python", "-m", "uvicorn", "src.server:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["python", "-m", "uvicorn", "src.server:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]
 
 # Alternative commands:
 # For development: docker run -it -p 8000:8000 linux-sre-env python demo.py
