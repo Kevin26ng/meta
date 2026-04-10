@@ -36,8 +36,6 @@ class Objective:
         raise NotImplementedError
 
 
-
-
 # ======================================================================
 #  SCENARIO TASK — wraps the composable scenario engine
 # ======================================================================
@@ -101,11 +99,23 @@ def all_task_keys() -> List[str]:
 
 
 def task_metadata(key: str) -> Dict:
-    """Return metadata for a task/scenario."""
     task = get_task(key)
+    objectives = []
+    if isinstance(task, ScenarioTask):
+        objectives = [
+            {
+                "description": o.description,
+                "check_fn": o.check_fn,
+                "points": o.points,
+            }
+            for o in task.scenario.objectives
+        ]
     return {
         "name": task.nm,
         "difficulty": task.diff,
         "description": task.desc,
         "instructions": task.guide(),
+        "objectives": objectives,
+        "has_grader": len(objectives) > 0,
+        "grader_count": len(objectives),
     }
