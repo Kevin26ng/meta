@@ -163,8 +163,10 @@ async def get_scenario(key: str):
 # ======================================================================
 
 @app.post("/api/v1/env/reset")
-async def reset(req: ResetPayload):
+async def reset(req: Optional[ResetPayload] = None):
     global counter
+    if req is None:
+        req = ResetPayload()
     try:
         env = TrainingEnv(scenario=req.scenario)
         eid = f"env_{counter}"
@@ -213,7 +215,7 @@ async def delete_env(env_id: str):
 # ======================================================================
 
 @app.post("/reset")
-async def reset_alias(req: ResetPayload):
+async def reset_alias(req: Optional[ResetPayload] = None):
     return await reset(req)
 
 

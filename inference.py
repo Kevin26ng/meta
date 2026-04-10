@@ -10,7 +10,7 @@ from src.agent import LLMAgent, SystemPrompts
 from src.environment import TrainingEnv
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1").strip()
-MODEL_NAME = os.getenv("MODEL_NAME", "").strip()
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-5.3").strip()
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 
 # Validate
