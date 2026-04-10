@@ -1,0 +1,9 @@
+
+meta/
+.git/
+__pycache__/
+*.pyc
+.env
+tests/
+*.md
+validate-submission.sh
